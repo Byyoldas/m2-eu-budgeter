@@ -11,12 +11,19 @@
 
 import { useState, useCallback } from 'react';
 import { useProjectStore } from '../store/projectStore';
+import { formatAppError } from '../utils/formatAppError';
 import type { BudgetSummaryDto, AppError, FieldError } from '../types';
 
 interface MutationState {
   isLoading: boolean;
   globalError: AppError | null;
   fieldErrors: FieldError[];
+  /**
+   * Human-readable message for errors that have no dedicated field to display next to
+   * (a global/entity-level error, e.g. "only one PI allowed" or a backend Persistence
+   * failure). Null when there is nothing to show beyond per-field messages.
+   */
+  formError: string | null;
   clearErrors: () => void;
 }
 
@@ -56,7 +63,14 @@ export function useBudgetSummary(): MutationState & {
     [setSummary, clearErrors]
   );
 
-  return { mutate, isLoading, globalError, fieldErrors, clearErrors };
+  const entityErrors = fieldErrors.filter((e) => !e.field);
+  const formError = globalError
+    ? formatAppError(globalError)
+    : entityErrors.length > 0
+      ? entityErrors.map((e) => e.message).join(' ')
+      : null;
+
+  return { mutate, isLoading, globalError, fieldErrors, formError, clearErrors };
 }
 
 /**

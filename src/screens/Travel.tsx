@@ -12,6 +12,7 @@ import { useBudgetSummary, usePreview } from '../hooks/useBudgetSummary';
 import { TripCard } from '../components/TripCard';
 import { EmptyStateCard } from '../components/EmptyStateCard';
 import { LivePreviewBox } from '../components/LivePreviewBox';
+import { WarningBanner } from '../components/WarningBanner';
 import type { TripDetailDto, TripCostPreviewDto, TripInput, CountrySummary } from '../types';
 
 interface TravelProps {
@@ -43,7 +44,7 @@ export function Travel({ onNext, onBack }: TravelProps) {
   const [editingTrip, setEditingTrip] = useState<TripDetailDto | null>(null);
   const [previewResult, setPreviewResult] = useState<TripCostPreviewDto | null>(null);
 
-  const { mutate, isLoading } = useBudgetSummary();
+  const { mutate, isLoading, fieldErrors, formError } = useBudgetSummary();
   const { preview, isLoading: previewLoading } = usePreview<TripCostPreviewDto>();
 
   const { register, handleSubmit, watch, reset } = useForm({
@@ -58,6 +59,8 @@ export function Travel({ onNext, onBack }: TravelProps) {
   });
 
   const watched = watch();
+
+  const fieldError = (field: string) => fieldErrors.find((e) => e.field === field)?.message;
 
   useEffect(() => {
     if (storedCountries.length === 0) {
@@ -174,12 +177,15 @@ export function Travel({ onNext, onBack }: TravelProps) {
             <button type="button" className={`seg-btn${tripKind === 'FlatAmount' ? ' seg-btn--active' : ''}`} onClick={() => setTripKind('FlatAmount')}>Flat Amount</button>
           </div>
         </div>
+        {formError && <WarningBanner message={formError} severity="error" />}
+
         <div className="screen-split">
           <form className="screen-form" onSubmit={handleSubmit(onSubmit)} noValidate>
             <div className="form-section">
               <div className="form-field">
                 <label htmlFor="trip-name" className="form-label required">Trip Name / Purpose</label>
-                <input id="trip-name" type="text" placeholder="e.g. Conference EMNLP, Field work India" className="form-input" {...register('name')} />
+                <input id="trip-name" type="text" placeholder="e.g. Conference EMNLP, Field work India" className={`form-input${fieldError('name') ? ' form-input--error' : ''}`} {...register('name')} />
+                {fieldError('name') && <span className="form-error">{fieldError('name')}</span>}
               </div>
               <div className="form-row">
                 <div className="form-field">
@@ -200,12 +206,13 @@ export function Travel({ onNext, onBack }: TravelProps) {
                 <>
                   <div className="form-field">
                     <label htmlFor="country" className="form-label required">Destination Country</label>
-                    <select id="country" className="form-input" {...register('destination_country_code')}>
+                    <select id="country" className={`form-input${fieldError('destination_country_code') ? ' form-input--error' : ''}`} {...register('destination_country_code')}>
                       <option value="">— Select country —</option>
                       {storedCountries.map((c: CountrySummary) => (
                         <option key={c.country_code} value={c.country_code}>{c.country_name}</option>
                       ))}
                     </select>
+                    {fieldError('destination_country_code') && <span className="form-error">{fieldError('destination_country_code')}</span>}
                   </div>
                   <div className="form-field">
                     <label htmlFor="distance" className="form-label required">One-Way Distance (km)</label>
@@ -215,11 +222,13 @@ export function Travel({ onNext, onBack }: TravelProps) {
                   <div className="form-row">
                     <div className="form-field">
                       <label htmlFor="nights" className="form-label required">Nights</label>
-                      <input id="nights" type="number" min={1} className="form-input" {...register('number_of_nights', { valueAsNumber: true })} />
+                      <input id="nights" type="number" min={1} className={`form-input${fieldError('number_of_nights') ? ' form-input--error' : ''}`} {...register('number_of_nights', { valueAsNumber: true })} />
+                      {fieldError('number_of_nights') && <span className="form-error">{fieldError('number_of_nights')}</span>}
                     </div>
                     <div className="form-field">
                       <label htmlFor="days" className="form-label required">Days (subsistence)</label>
-                      <input id="days" type="number" min={1} className="form-input" {...register('number_of_days', { valueAsNumber: true })} />
+                      <input id="days" type="number" min={1} className={`form-input${fieldError('number_of_days') ? ' form-input--error' : ''}`} {...register('number_of_days', { valueAsNumber: true })} />
+                      {fieldError('number_of_days') && <span className="form-error">{fieldError('number_of_days')}</span>}
                     </div>
                   </div>
                   <div className="form-field">
@@ -232,7 +241,8 @@ export function Travel({ onNext, onBack }: TravelProps) {
               {tripKind === 'FlatAmount' && (
                 <div className="form-field">
                   <label htmlFor="flat" className="form-label required">Flat Amount / instance (€)</label>
-                  <input id="flat" type="number" step="any" min={0} className="form-input" {...register('flat_amount_per_instance_eur')} />
+                  <input id="flat" type="number" step="any" min={0} className={`form-input${fieldError('flat_amount_per_instance_eur') ? ' form-input--error' : ''}`} {...register('flat_amount_per_instance_eur')} />
+                  {fieldError('flat_amount_per_instance_eur') && <span className="form-error">{fieldError('flat_amount_per_instance_eur')}</span>}
                 </div>
               )}
 

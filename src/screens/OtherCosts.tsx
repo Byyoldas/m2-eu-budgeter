@@ -42,7 +42,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showCfsModal, setShowCfsModal] = useState(false);
 
-  const { mutate, isLoading, fieldErrors } = useBudgetSummary();
+  const { mutate, isLoading, fieldErrors, formError } = useBudgetSummary();
 
   // C3 items (excluding CFS)
   const regularItems = summary?.other_cost_detail?.filter((i) => !i.is_cfs_item) ?? [];
@@ -102,6 +102,8 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
         <div className="screen-header">
           <h2 className="screen-title">{editingId ? 'Edit Cost Item' : 'Add Other Direct Cost'}</h2>
         </div>
+        {formError && <WarningBanner message={formError} severity="error" />}
+
         <form className="screen-form" onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="form-section">
             <div className="form-field">

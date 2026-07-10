@@ -16,6 +16,7 @@ import { useBudgetSummary, usePreview } from '../hooks/useBudgetSummary';
 import { EquipmentCard } from '../components/EquipmentCard';
 import { EmptyStateCard } from '../components/EmptyStateCard';
 import { LivePreviewBox } from '../components/LivePreviewBox';
+import { WarningBanner } from '../components/WarningBanner';
 import type { EquipmentItemDetailDto, EquipmentPreviewDto, EquipmentItemInput } from '../types';
 
 interface EquipmentProps {
@@ -41,7 +42,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
   const [editingItem, setEditingItem] = useState<EquipmentItemDetailDto | null>(null);
   const [previewResult, setPreviewResult] = useState<EquipmentPreviewDto | null>(null);
 
-  const { mutate, isLoading, fieldErrors } = useBudgetSummary();
+  const { mutate, isLoading, fieldErrors, formError } = useBudgetSummary();
   const { preview, isLoading: previewLoading } = usePreview<EquipmentPreviewDto>();
 
   const {
@@ -133,6 +134,8 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
         <div className="screen-header">
           <h2 className="screen-title">{mode === 'add' ? 'Add Equipment Item' : 'Edit Equipment Item'}</h2>
         </div>
+        {formError && <WarningBanner message={formError} severity="error" />}
+
         <div className="screen-split">
           <form className="screen-form" onSubmit={handleSubmit(onSubmit)} noValidate>
             <div className="form-section">

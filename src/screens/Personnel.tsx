@@ -13,6 +13,7 @@ import { useBudgetSummary, usePreview } from '../hooks/useBudgetSummary';
 import { RoleCard } from '../components/RoleCard';
 import { EmptyStateCard } from '../components/EmptyStateCard';
 import { LivePreviewBox } from '../components/LivePreviewBox';
+import { WarningBanner } from '../components/WarningBanner';
 import type { PersonnelRoleDetailDto, RoleCostPreviewDto, PersonnelRoleInput } from '../types';
 
 interface PersonnelProps {
@@ -47,7 +48,7 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
   const [editingRole, setEditingRole] = useState<PersonnelRoleDetailDto | null>(null);
   const [previewResult, setPreviewResult] = useState<RoleCostPreviewDto | null>(null);
 
-  const { mutate, isLoading, fieldErrors } = useBudgetSummary();
+  const { mutate, isLoading, fieldErrors, formError } = useBudgetSummary();
   const { preview, isLoading: previewLoading } = usePreview<RoleCostPreviewDto>();
 
   const {
@@ -170,6 +171,8 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
           <h2 className="screen-title">{mode === 'add' ? 'Add Personnel Role' : 'Edit Personnel Role'}</h2>
         </div>
 
+        {formError && <WarningBanner message={formError} severity="error" />}
+
         <div className="screen-split">
           <form className="screen-form" onSubmit={handleSubmit(onSubmit)} noValidate>
             <div className="form-section">
@@ -260,13 +263,12 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
                       <input
                         type="checkbox"
                         value={year}
-                        {...register('active_years', { valueAsNumber: false })}
                         onChange={(e) => {
                           const current = watchedValues.active_years ?? [];
                           if (e.target.checked) {
-                            setValue('active_years', [...current, year].sort());
+                            setValue('active_years', [...current, year].sort(), { shouldValidate: true });
                           } else {
-                            setValue('active_years', current.filter((y) => y !== year));
+                            setValue('active_years', current.filter((y) => y !== year), { shouldValidate: true });
                           }
                         }}
                         checked={(watchedValues.active_years ?? []).includes(year)}
