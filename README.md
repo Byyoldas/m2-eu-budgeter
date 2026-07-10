@@ -2,7 +2,7 @@
 
 A cross-platform desktop application for preparing EU grant budgets (ERC Consolidator Grant and other Horizon Europe Actual Costs budgets) — personnel, equipment, travel, other direct costs, indirect costs, and the final submission table — without touching a spreadsheet.
 
-It replaces a hand-built Excel workbook that was error-prone (hardcoded rates duplicated in seven places, string `-` placeholders silently ignored by `SUM()`, travel costs averaged equally across all years instead of the years they actually occur, an EU accommodation rate that quietly exceeded the official limit). Every one of those issues is fixed in the calculation engine here — see [`docs/excel-analysis.md`](docs/excel-analysis.md) Appendix C for the full list of corrections.
+It replaces a hand-built Excel workbook that was error-prone (hardcoded rates duplicated in seven places, string `-` placeholders silently ignored by `SUM()`, travel costs averaged equally across all years instead of the years they actually occur, an EU accommodation rate that quietly exceeded the official limit). Every one of those issues is fixed in the calculation engine.
 
 ---
 
