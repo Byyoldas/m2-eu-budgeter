@@ -136,4 +136,4 @@ Full module map and conventions: [`docs/developer-guide.md`](docs/developer-guid
 
 ## Status
 
-v1.0 — single-project, single-beneficiary, Actual Costs funding model. Not code-signed. Windows installer is built via GitHub Actions CI (`.github/workflows/windows-build.yml`); macOS is built locally.
+v1.0 — Windows installer is built via GitHub Actions CI (`.github/workflows/windows-build.yml`); macOS is built locally.
