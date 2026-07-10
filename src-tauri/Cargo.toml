@@ -1,0 +1,37 @@
+[package]
+name = "erc-budget"
+version = "1.0.0"
+description = "ERC Consolidator Grant Budget Tool"
+authors = ["ERC Budget Team"]
+edition = "2021"
+
+[lib]
+name = "erc_budget_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "erc-budget"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rust_decimal = { version = "1", features = ["serde-str"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "1"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+rust_decimal_macros = "1"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
