@@ -41,7 +41,7 @@ Full architecture write-up: [`docs/architecture-final.md`](docs/architecture-fin
 
 Download the installer for your platform from the project's GitHub Releases page:
 
-- **macOS:** `.dmg` — drag the app into Applications, then right-click → Open on first launch (Gatekeeper requires this once for unsigned/unnotarized apps).
+- **macOS:** `.dmg` — drag the app into Applications, then right-click → Open on first launch (Gatekeeper requires this once for unsigned/unnotarized apps). If it doesn't work, try opening terminal and write the following code and execute it and then try to open the app. It will work. Code: `xattr -cr /Applications/M2-EU Budgeter.app`
 - **Windows:** NSIS `.exe` or `.msi` — run the installer. If SmartScreen warns "unrecognized publisher," choose *More info → Run anyway* (the build isn't currently code-signed).
 
 Full walkthrough of every screen: [`docs/user-manual.md`](docs/user-manual.md).
