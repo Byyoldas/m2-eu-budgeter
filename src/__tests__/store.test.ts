@@ -207,6 +207,7 @@ describe('setSummary', () => {
       equipment_detail: [{
         id: 'uuid-2',
         name: 'Laptop',
+        purchase_cost_eur: '3000',
         theoretical_eligible_eur: '2864.58',
         maximum_eligible_eur: '2500',
         is_capped: true,
@@ -224,6 +225,7 @@ describe('setSummary', () => {
         name: 'India Fieldwork',
         work_package_ids: [1],
         number_of_instances: 4,
+        destination_country_code: 'IN',
         flight_cost_per_instance: '857',
         accommodation_cost_per_instance: '780',
         subsistence_cost_per_instance: '250',

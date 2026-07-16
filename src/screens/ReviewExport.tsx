@@ -26,6 +26,7 @@ function fmt(v: string | undefined): string {
 export function ReviewExport({ onBack }: ReviewExportProps) {
   const summary = useSummary();
   const projectConfig = useProjectStore((s) => s.projectConfig);
+  const countries = useProjectStore((s) => s.countries);
   const projectPath = useProjectStore((s) => s.projectPath);
   const setProjectPath = useProjectStore((s) => s.setProjectPath);
   const setDirty = useProjectStore((s) => s.setDirty);
@@ -55,7 +56,7 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
   const handleExcelExport = async () => {
     try {
       setExportStatus('Generating Excel…');
-      await exportToExcel(summary, projectConfig);
+      await exportToExcel(summary, projectConfig, countries);
       setExportStatus('Excel export complete.');
     } catch {
       setExportStatus('Excel export failed.');
@@ -175,13 +176,16 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
       {/* Personnel detail */}
       {summary.role_detail.length > 0 && (
         <div className="review-detail-card">
-          <h3 className="review-section-title">Personnel Detail</h3>
+          <h3 className="review-section-title">Personnel Detail — Cost by Work Package</h3>
           <table className="review-table">
             <thead>
               <tr>
                 <th>Role</th>
                 <th>Type</th>
                 <th>FTE</th>
+                {wpBudgets.map((wp) => (
+                  <th key={wp.work_package_id}>{wp.work_package_name || `WP${wp.work_package_id}`}</th>
+                ))}
                 <th>Total Cost</th>
               </tr>
             </thead>
@@ -191,7 +195,11 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
                   <td>{r.role_label}</td>
                   <td>{r.role_type}</td>
                   <td>{parseFloat(r.fte_fraction).toFixed(2)}</td>
-                  <td>{fmt(r.total_cost_eur)}</td>
+                  {wpBudgets.map((wp) => {
+                    const amount = r.wp_breakdown.find((w) => w.work_package_id === wp.work_package_id);
+                    return <td key={wp.work_package_id}>{amount ? fmt(amount.amount_eur) : '—'}</td>;
+                  })}
+                  <td><strong>{fmt(r.total_cost_eur)}</strong></td>
                 </tr>
               ))}
             </tbody>

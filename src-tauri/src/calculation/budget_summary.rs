@@ -143,6 +143,7 @@ pub fn calculate_budget_summary(
         equipment_detail.push(EquipmentItemDetailDto {
             id: item.id,
             name: item.name.clone(),
+            purchase_cost_eur: item.purchase_cost_eur,
             theoretical_eligible_eur: result.theoretical_eligible_eur,
             maximum_eligible_eur: result.maximum_eligible_eur,
             is_capped: result.is_capped,
@@ -183,6 +184,7 @@ pub fn calculate_budget_summary(
                     name: trip.name.clone(),
                     work_package_ids: trip.work_package_ids.clone(),
                     number_of_instances: trip.number_of_instances,
+                    destination_country_code: Some(destination_country_code.clone()),
                     flight_cost_per_instance: Some(r.flight_cost_per_instance.to_string()),
                     accommodation_cost_per_instance: Some(r.accommodation_cost_per_instance.to_string()),
                     subsistence_cost_per_instance: Some(r.subsistence_cost_per_instance.to_string()),
@@ -203,6 +205,7 @@ pub fn calculate_budget_summary(
                     name: trip.name.clone(),
                     work_package_ids: trip.work_package_ids.clone(),
                     number_of_instances: trip.number_of_instances,
+                    destination_country_code: None,
                     flight_cost_per_instance: None,
                     accommodation_cost_per_instance: None,
                     subsistence_cost_per_instance: None,

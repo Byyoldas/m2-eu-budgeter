@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { open as openInBrowser } from '@tauri-apps/plugin-shell';
 import { useProjectStore, useTrips } from '../store/projectStore';
 import { addTrip, updateTrip, deleteTrip, previewTripCost, getCountries } from '../ipc/commands';
 import { useBudgetSummary, usePreview } from '../hooks/useBudgetSummary';
@@ -22,6 +23,9 @@ interface TravelProps {
 
 type Mode = 'list' | 'add' | 'edit';
 type TripKind = 'Itemized' | 'FlatAmount';
+
+const DISTANCE_CALCULATOR_URL =
+  'https://commission.europa.eu/funding-and-tenders/procedures-guidelines-tenders/information-contractors-and-beneficiaries/calculate-unit-costs-eligible-travel-costs_en';
 
 function fmt(v: string | null | undefined): string {
   if (!v) return '—';
@@ -209,9 +213,8 @@ export function Travel({ onNext, onBack }: TravelProps) {
                     <span className="form-hint">
                       Drives flight band selection. Use 0 for local/train trips (no flight).{' '}
                       <a
-                        href="https://commission.europa.eu/funding-and-tenders/procedures-guidelines-tenders/information-contractors-and-beneficiaries/calculate-unit-costs-eligible-travel-costs_en"
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={DISTANCE_CALCULATOR_URL}
+                        onClick={(e) => { e.preventDefault(); openInBrowser(DISTANCE_CALCULATOR_URL); }}
                       >
                         Distance Calculator ↗
                       </a>

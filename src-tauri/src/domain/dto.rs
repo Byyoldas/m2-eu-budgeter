@@ -143,6 +143,8 @@ pub struct EquipmentItemDetailDto {
     pub id: Uuid,
     pub name: String,
     #[serde(with = "rust_decimal::serde::str")]
+    pub purchase_cost_eur: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
     pub theoretical_eligible_eur: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
     pub maximum_eligible_eur: Decimal,
@@ -182,6 +184,8 @@ pub struct TripDetailDto {
     pub name: String,
     pub work_package_ids: Vec<u8>,
     pub number_of_instances: u32,
+    /// None for flat-amount trips, which have no destination/breakdown.
+    pub destination_country_code: Option<String>,
     /// Per-instance cost details (None for flat-amount trips that have no breakdown).
     pub flight_cost_per_instance: Option<String>,
     pub accommodation_cost_per_instance: Option<String>,

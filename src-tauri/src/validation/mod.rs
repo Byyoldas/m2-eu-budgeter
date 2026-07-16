@@ -339,6 +339,7 @@ pub fn validate_project_config(dto: &crate::domain::dto::ProjectConfigDto) -> Re
             ));
         } else {
             let max_month = dto.duration_years as u32 * 12;
+            let mut wp_ranges_valid = true;
             for (i, (&start, &end)) in dto.work_package_start_months.iter()
                 .zip(dto.work_package_end_months.iter())
                 .enumerate()
@@ -349,7 +350,34 @@ pub fn validate_project_config(dto: &crate::domain::dto::ProjectConfigDto) -> Re
                         "INVALID_WP_DURATION",
                         format!("WP{} duration (Month {start}–{end}) is invalid for a {max_month}-month project.", i + 1),
                     ));
+                    wp_ranges_valid = false;
                     break;
+                }
+            }
+
+            // Every project month must be covered by at least one Work Package,
+            // otherwise personnel charged in an uncovered month would silently
+            // disappear from every per-WP budget view (Review & Export, Excel,
+            // WP Summary) while still counting toward the Category A total —
+            // a reconciliation gap. Overlap between WPs is fine (split evenly).
+            if wp_ranges_valid {
+                let mut covered = vec![false; max_month as usize];
+                for (&start, &end) in dto.work_package_start_months.iter()
+                    .zip(dto.work_package_end_months.iter())
+                {
+                    for m in start..=end {
+                        covered[(m - 1) as usize] = true;
+                    }
+                }
+                if let Some(gap_idx) = covered.iter().position(|&c| !c) {
+                    errors.push(FieldError::new(
+                        "work_package_start_months",
+                        "WP_COVERAGE_GAP",
+                        format!(
+                            "Work Packages must collectively cover the entire {max_month}-month project duration. Month {} is not covered by any Work Package.",
+                            gap_idx + 1
+                        ),
+                    ));
                 }
             }
         }
@@ -858,6 +886,40 @@ mod tests {
         let mut dto = make_config_dto(5);
         dto.work_package_end_months = vec![60, 60, 61]; // 61 exceeds 60-month (5-year) duration
         assert!(has_field_error(&validate_project_config(&dto), "work_package_start_months", "INVALID_WP_DURATION"));
+    }
+
+    #[test]
+    fn test_val_cfg_wp_coverage_gap_returns_error() {
+        let mut dto = make_config_dto(1);
+        dto.work_package_count = 1;
+        dto.work_package_names = vec![None];
+        // WP1 only covers months 1-8; months 9-12 are uncovered.
+        dto.work_package_start_months = vec![1];
+        dto.work_package_end_months = vec![8];
+        assert!(has_field_error(&validate_project_config(&dto), "work_package_start_months", "WP_COVERAGE_GAP"));
+    }
+
+    #[test]
+    fn test_val_cfg_wp_sequential_full_coverage_is_ok() {
+        let mut dto = make_config_dto(1);
+        dto.duration_years = 2;
+        dto.work_package_count = 2;
+        dto.work_package_names = vec![None, None];
+        dto.work_package_start_months = vec![1, 13];
+        dto.work_package_end_months = vec![12, 24];
+        assert!(validate_project_config(&dto).is_ok());
+    }
+
+    #[test]
+    fn test_val_cfg_wp_overlapping_full_coverage_is_ok() {
+        let mut dto = make_config_dto(1);
+        dto.duration_years = 1;
+        dto.work_package_count = 2;
+        dto.work_package_names = vec![None, None];
+        // Both WPs span the full year — full coverage, overlapping (allowed).
+        dto.work_package_start_months = vec![1, 1];
+        dto.work_package_end_months = vec![12, 12];
+        assert!(validate_project_config(&dto).is_ok());
     }
 
     // ── Assertion helpers ──────────────────────────────────────────────────────

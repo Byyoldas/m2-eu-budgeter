@@ -19,6 +19,7 @@ use erc_budget_lib::domain::entities::*;
 use erc_budget_lib::domain::rate_data::{RateData, RateVersion, FlightBand, CountryRate};
 use erc_budget_lib::calculation::budget_summary::calculate_budget_summary;
 use erc_budget_lib::domain::dto::CfsStatus;
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use uuid::Uuid;
 
@@ -602,4 +603,98 @@ fn test_it05_subcontracting_included_in_eligible_and_requested_excluded_from_ind
     // Subcontracting is tagged to WP1 and should appear in its per-WP budget line.
     let wp1 = summary.wp_budgets.iter().find(|w| w.work_package_id == 1).unwrap();
     assert_eq!(wp1.subcontracting_eur, dec!(20000));
+}
+
+#[test]
+fn test_it06_personnel_wp_allocation_multi_year_multi_inflation() {
+    // 3-year (36-month) project, 2 Work Packages that each span two project
+    // years and together cover the full duration with no gap:
+    //   WP1 = months 1-18 (all of Year 1, first half of Year 2)
+    //   WP2 = months 19-36 (second half of Year 2, all of Year 3)
+    let config = ProjectConfig {
+        project_title: "Multi-Year WP Test".to_string(),
+        pi_name: "PI".to_string(),
+        call_reference: "ERC-2025-CoG".to_string(),
+        duration_years: 3,
+        work_package_count: 2,
+        work_package_names: vec![None, None],
+        work_package_start_months: vec![1, 19],
+        work_package_end_months: vec![18, 36],
+        default_inflation_rate_pct: dec!(0),
+        try_eur_rate: dec!(50),
+        indirect_cost_rate_pct: dec!(25),
+        rate_version_id: "v_from_2025_05_13".to_string(),
+        call_opening_date: None,
+    };
+
+    // RoleA: base 100 EUR/month (5000 TRY / 50), 10% inflation, active the
+    // entire project (months 1-36) — spans both WPs and all three years.
+    //   Year1 monthly = 100×1.10   = 110.0,  Year2 = 100×1.10^2 = 121.00,
+    //   Year3 = 100×1.10^3 = 133.100
+    //   Months 1-12  (Year1, 12mo, all in WP1)              → WP1 += 110.0×12   = 1320.0
+    //   Months 13-18 (Year2 first half, 6mo, all in WP1)    → WP1 += 121.00×6   = 726.00
+    //   Months 19-24 (Year2 second half, 6mo, all in WP2)   → WP2 += 121.00×6   = 726.00
+    //   Months 25-36 (Year3, 12mo, all in WP2)              → WP2 += 133.100×12 = 1597.200
+    //   RoleA total = 1320.0+726.00+726.00+1597.200 = 4369.200
+    let role_a = PersonnelRole {
+        id: Uuid::new_v4(),
+        role_label: "RoleA".to_string(),
+        role_type: RoleType::Expert,
+        current_monthly_salary_try: dec!(5000),
+        fte_fraction: dec!(1.0),
+        inflation_rate_pct: dec!(10),
+        start_month: 1,
+        end_month: 36,
+    };
+
+    // RoleB: base 160 EUR/month (8000 TRY / 50), 25% inflation, active
+    // months 10-30 — spans both WPs and all three years, different rate.
+    //   Year1 monthly = 160×1.25    = 200.0,   Year2 = 160×1.25^2 = 250.0000,
+    //   Year3 = 160×1.25^3 = 312.500000
+    //   Months 10-12 (Year1 tail, 3mo, in WP1)              → WP1 += 200.0×3     = 600.0
+    //   Months 13-18 (Year2 first half, 6mo, in WP1)        → WP1 += 250.0000×6  = 1500.0000
+    //   Months 19-24 (Year2 second half, 6mo, in WP2)       → WP2 += 250.0000×6  = 1500.0000
+    //   Months 25-30 (Year3 partial [role ends at 30], 6mo, in WP2) → WP2 += 312.500000×6 = 1875.000000
+    //   RoleB total = 600.0+1500.0000+1500.0000+1875.000000 = 5475.000000
+    let role_b = PersonnelRole {
+        id: Uuid::new_v4(),
+        role_label: "RoleB".to_string(),
+        role_type: RoleType::PostDoc,
+        current_monthly_salary_try: dec!(8000),
+        fte_fraction: dec!(1.0),
+        inflation_rate_pct: dec!(25),
+        start_month: 10,
+        end_month: 30,
+    };
+
+    let mut project = Project::new(config);
+    project.personnel_roles.push(role_a);
+    project.personnel_roles.push(role_b);
+
+    let rate_data = make_rate_data();
+    let summary = calculate_budget_summary(&project, &rate_data).unwrap();
+
+    // Category A total = RoleA + RoleB = 4369.200 + 5475.000000 = 9844.2
+    assert_eq!(summary.category_a_total, dec!(9844.2));
+
+    let wp1 = summary.wp_budgets.iter().find(|w| w.work_package_id == 1).unwrap();
+    let wp2 = summary.wp_budgets.iter().find(|w| w.work_package_id == 2).unwrap();
+
+    // WP1 = RoleA(1320.0+726.00=2046.00) + RoleB(600.0+1500.0000=2100.0000) = 4146.00
+    assert_eq!(wp1.personnel_eur, dec!(4146.00));
+    // WP2 = RoleA(726.00+1597.200=2323.200) + RoleB(1500.0000+1875.000000=3375.000000) = 5698.2
+    assert_eq!(wp2.personnel_eur, dec!(5698.2));
+
+    // No discrepancy: the sum of every WP's personnel allocation must equal
+    // the Category A grand total (the WP timelines fully cover the project,
+    // so no month can be "orphaned" out of every WP bucket).
+    assert_eq!(wp1.personnel_eur + wp2.personnel_eur, summary.category_a_total);
+
+    // Same reconciliation must hold per-role (each role's own wp_breakdown
+    // sums to that role's total_cost_eur — what Excel's "Unattributed"
+    // column checks against).
+    for role in &summary.role_detail {
+        let breakdown_sum: Decimal = role.wp_breakdown.iter().map(|w| w.amount_eur).sum();
+        assert_eq!(breakdown_sum, role.total_cost_eur, "role {} WP breakdown must sum to its total cost", role.role_label);
+    }
 }

@@ -123,6 +123,7 @@ export interface RoleCostPreviewDto {
 export interface EquipmentItemDetailDto {
   id: string; // UUID
   name: string;
+  purchase_cost_eur: string; // Decimal
   theoretical_eligible_eur: string; // Decimal
   maximum_eligible_eur: string;     // Decimal
   is_capped: boolean;
@@ -150,6 +151,7 @@ export interface TripDetailDto {
   name: string;
   work_package_ids: number[];
   number_of_instances: number;
+  destination_country_code: string | null;
   flight_cost_per_instance: string | null;
   accommodation_cost_per_instance: string | null;
   subsistence_cost_per_instance: string | null;

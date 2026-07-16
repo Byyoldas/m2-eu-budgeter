@@ -6,7 +6,11 @@
  *            are formulas that SUM the detail sheets rather than static copies)
  *   Sheet 2: Gantt Chart (rendered PNG of the Work Package timeline)
  *   Sheet 3: Personnel Detail (salary/inflation input cells + formula-built
- *            per-year and total costs)
+ *            Base Monthly cost; per-Work-Package cost is a genuine formula —
+ *            SUMPRODUCT over a hidden per-month helper sheet that replicates
+ *            the backend's month-by-month WP-overlap allocation, with yearly
+ *            inflation compounding applied per month — plus a formula-derived
+ *            Unattributed column that reconciles against the backend's total)
  *   Sheet 4: Equipment Detail
  *   Sheet 5: Travel Detail
  *   Sheet 6: Other Direct Costs
@@ -16,7 +20,7 @@
  */
 
 import ExcelJS from 'exceljs';
-import type { BudgetSummaryDto, ProjectConfigInput, WpBudgetDto } from '../types';
+import type { BudgetSummaryDto, ProjectConfigInput, WpBudgetDto, CountrySummary } from '../types';
 
 function n(v: string | undefined): number {
   return parseFloat(v ?? '0') || 0;
@@ -123,24 +127,39 @@ function renderGanttChartPng(config: ProjectConfigInput): { dataUrl: string; wid
 export async function exportToExcel(
   summary: BudgetSummaryDto,
   config: ProjectConfigInput | null,
+  countries: CountrySummary[] = [],
 ): Promise<void> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'M2-EU Budgeter';
   wb.created = new Date();
 
   const wpBudgets = summary.wp_budgets;
-  const duration = config?.duration_years ?? 1;
+  const countryName = (code: string | null) => {
+    if (!code) return '';
+    return countries.find((c) => c.country_code === code)?.country_name ?? code;
+  };
 
   // ── Precompute detail-sheet row layouts (needed so Budget Summary formulas
   // can reference the right ranges before those sheets exist) ───────────────
 
   const personnelExists = summary.role_detail.length > 0;
-  const personnelLastRow = 1 + summary.role_detail.length; // header at row 1
+  const maxMonths = (config?.duration_years ?? 1) * 12;
+  // Personnel sheet layout: a small "WP Timelines" reference table at the top
+  // (rows 1-2 + one row per WP), then a blank row, then the roles table.
+  const personnelWpTimelineFirstRow = 3;
+  const personnelWpTimelineLastRow = 2 + wpBudgets.length;
+  const personnelHeaderRow = personnelWpTimelineLastRow + 2;
+  const personnelFirstDataRow = personnelHeaderRow + 1;
+  const personnelLastRow = personnelFirstDataRow + summary.role_detail.length - 1;
   const personnelFixedCols = 7; // Role, Type, Salary(TRY), Increase%, FTE, Start, End
   const personnelBaseMonthlyCol = personnelFixedCols + 1; // H
-  const personnelYear1Col = personnelBaseMonthlyCol + 1; // I
-  const personnelTotalCol = personnelYear1Col + duration; // right after the last Year column
+  const personnelWpStartCol = personnelBaseMonthlyCol + 1; // I
+  const personnelUnattributedCol = personnelWpStartCol + wpBudgets.length; // right after the last WP column
+  const personnelTotalCol = personnelUnattributedCol + 1;
   const personnelTotalColLetter = colLetter(personnelTotalCol);
+  // Hidden helper sheet columns: A = row label, B.. = one column per project month.
+  const helperMonthRange = `_WPMonthHelper!$B$1:$${colLetter(1 + maxMonths)}$1`;
+  const helperReciprocalRange = `_WPMonthHelper!$B$3:$${colLetter(1 + maxMonths)}$3`;
 
   const equipmentExists = summary.equipment_detail.length > 0;
   const equipmentLastRow = 1 + summary.equipment_detail.length;
@@ -191,7 +210,7 @@ export async function exportToExcel(
 
   const aRow = addCategoryRow(
     'A  Personnel', 'personnel_eur',
-    personnelExists ? `SUM(Personnel!${personnelTotalColLetter}2:${personnelTotalColLetter}${personnelLastRow})` : 0,
+    personnelExists ? `SUM(Personnel!${personnelTotalColLetter}${personnelFirstDataRow}:${personnelTotalColLetter}${personnelLastRow})` : 0,
   );
   const bRow = addCategoryRow('B  Subcontracting', 'subcontracting_eur', n(summary.category_b_total));
   const c1Row = addCategoryRow(
@@ -253,15 +272,55 @@ export async function exportToExcel(
   }
 
   // ── Sheet 3: Personnel ────────────────────────────────────────────────────
+  //
+  // A hidden helper sheet drives the per-Work-Package formulas: row 1 lists
+  // every project month (1..duration*12), row 2 counts how many WPs cover
+  // that month (from the Personnel sheet's own WP Timelines table), and row
+  // 3 is the safe reciprocal (0 for months no WP covers, avoiding #DIV/0!
+  // instead of relying on the WP-membership term to zero it out afterwards).
 
   if (personnelExists) {
+    const helperSheet = wb.addWorksheet('_WPMonthHelper');
+    helperSheet.state = 'hidden';
+
+    const monthRow = helperSheet.addRow(['Month']);
+    for (let m = 1; m <= maxMonths; m++) {
+      monthRow.getCell(1 + m).value = m;
+    }
+    const countRow = helperSheet.addRow(['WP overlap count']);
+    const reciprocalRow = helperSheet.addRow(['1 / count (0 if uncovered)']);
+    for (let m = 1; m <= maxMonths; m++) {
+      const col = 1 + m;
+      const monthCellRef = `${colLetter(col)}$1`;
+      const countFormula = wpBudgets.length > 0
+        ? `SUMPRODUCT((Personnel!$B$${personnelWpTimelineFirstRow}:$B$${personnelWpTimelineLastRow}<=${monthCellRef})*(Personnel!$C$${personnelWpTimelineFirstRow}:$C$${personnelWpTimelineLastRow}>=${monthCellRef}))`
+        : '0';
+      countRow.getCell(col).value = { formula: countFormula };
+      const countCellRef = `${colLetter(col)}2`;
+      reciprocalRow.getCell(col).value = { formula: `IF(${countCellRef}=0,0,1/${countCellRef})` };
+    }
+
     const persSheet = wb.addWorksheet('Personnel');
     persSheet.properties.defaultColWidth = 15;
+
+    // WP Timelines reference table (rows 1-2 + one row per WP).
+    persSheet.addRow(['Work Package Timelines']).font = { bold: true };
+    const wpTimelineHeader = persSheet.addRow(['WP', 'Start Month', 'End Month']);
+    wpTimelineHeader.font = { bold: true };
+    wpBudgets.forEach((wp, i) => {
+      persSheet.addRow([
+        wpLabel(wp),
+        config?.work_package_start_months[i] ?? 1,
+        config?.work_package_end_months[i] ?? maxMonths,
+      ]);
+    });
+    persSheet.addRow([]);
 
     const headers = [
       'Role', 'Type', 'Current Salary (TRY)', 'Annual Increase (%)', 'FTE',
       'Start Month', 'End Month', 'Base Monthly (€)',
-      ...Array.from({ length: duration }, (_, i) => `Year ${i + 1} (€)`),
+      ...wpBudgets.map((wp) => `${wpLabel(wp)} (€)`),
+      'Unattributed (€)',
       'Total (€)',
     ];
     const ph = persSheet.addRow(headers);
@@ -287,17 +346,37 @@ export async function exportToExcel(
 
       row.getCell(personnelBaseMonthlyCol).value = { formula: `${salaryCell}/${tryRateCellRef}` };
 
-      for (let y = 1; y <= duration; y++) {
-        const col = personnelYear1Col + y - 1;
-        const activeMonths = `MAX(0,MIN(${endCell},${y}*12)-MAX(${startCell},(${y}-1)*12+1)+1)`;
+      // Per-WP cost: SUMPRODUCT over every project month of
+      //   [month in role's Start-End] * [month in this WP's Start-End] *
+      //   [that month's inflated salary] * [1/overlap-count that month] * FTE
+      // This mirrors allocate_personnel_cost_by_wp exactly, including the
+      // even split across WPs that are simultaneously active in a month.
+      wpBudgets.forEach((_wp, i) => {
+        const wpTableRow = personnelWpTimelineFirstRow + i;
+        const wpStartCell = `$B$${wpTableRow}`;
+        const wpEndCell = `$C$${wpTableRow}`;
+        const col = personnelWpStartCol + i;
         row.getCell(col).value = {
-          formula: `${baseMonthlyCell}*(1+${increaseCell}/100)^${y}*${activeMonths}*${fteCell}`,
+          formula: `SUMPRODUCT((${helperMonthRange}>=${startCell})*(${helperMonthRange}<=${endCell})*(${helperMonthRange}>=${wpStartCell})*(${helperMonthRange}<=${wpEndCell})*(${baseMonthlyCell}*(1+${increaseCell}/100)^ROUNDUP(${helperMonthRange}/12,0))*${helperReciprocalRange}*${fteCell})`,
         };
-      }
+      });
 
-      row.getCell(personnelTotalCol).value = {
-        formula: `SUM(${colLetter(personnelYear1Col)}${r}:${colLetter(personnelYear1Col + duration - 1)}${r})`,
-      };
+      row.getCell(personnelTotalCol).value = n(role.total_cost_eur);
+
+      // Any months of the role's Start/End period outside every WP timeline
+      // aren't attributed to a WP bucket — surfaced here so the row still
+      // reconciles to the authoritative Total. In the normal case (every
+      // active month falls inside some WP) this is 0.
+      const totalCellRef = `${colLetter(personnelTotalCol)}${r}`;
+      if (wpBudgets.length > 0) {
+        const wpRangeStart = `${colLetter(personnelWpStartCol)}${r}`;
+        const wpRangeEnd = `${colLetter(personnelWpStartCol + wpBudgets.length - 1)}${r}`;
+        row.getCell(personnelUnattributedCol).value = {
+          formula: `${totalCellRef}-SUM(${wpRangeStart}:${wpRangeEnd})`,
+        };
+      } else {
+        row.getCell(personnelUnattributedCol).value = { formula: totalCellRef };
+      }
     }
 
     persSheet.getColumn(3).numFmt = '#,##0.00';
@@ -312,19 +391,25 @@ export async function exportToExcel(
   if (equipmentExists) {
     const eqSheet = wb.addWorksheet('Equipment');
     eqSheet.properties.defaultColWidth = 20;
-    const eh = eqSheet.addRow(['Item', 'Theoretical (€)', 'Max (€)', 'Eligible Depreciation (€)', 'Capped?']);
+    const eh = eqSheet.addRow([
+      'Item', 'Theoretical (€)', 'Max (€)', 'Eligible Depreciation (€)', 'Capped?',
+      'Purchase Cost (€)', 'Total Need an External Funding (€)',
+    ]);
     eh.font = { bold: true };
 
     for (const item of summary.equipment_detail) {
-      eqSheet.addRow([
+      const row = eqSheet.addRow([
         item.name,
         n(item.theoretical_eligible_eur),
         n(item.maximum_eligible_eur),
         n(item.eligible_depreciation_eur),
         item.is_capped ? 'Yes' : 'No',
+        n(item.purchase_cost_eur),
       ]);
+      // Total Need an External Funding = Purchase Cost − Eligible Depreciation
+      row.getCell(7).value = { formula: `F${row.number}-D${row.number}` };
     }
-    for (let col = 2; col <= 4; col++) {
+    for (const col of [2, 3, 4, 6, 7]) {
       eqSheet.getColumn(col).numFmt = '#,##0.00';
     }
   }
@@ -337,7 +422,11 @@ export async function exportToExcel(
   if (travelExists) {
     const travelSheet = wb.addWorksheet('Travel');
     travelSheet.properties.defaultColWidth = 18;
-    const th = travelSheet.addRow(['Trip', 'Work Package(s)', 'Instances', 'Per Instance (€)', 'Total (€)']);
+    const th = travelSheet.addRow([
+      'Trip', 'Work Package(s)', 'Instances', 'Per Instance (€)', 'Total (€)',
+      'Destination Country', 'Flight Cost (€)', 'Accommodation Cost (€)',
+      'Subsistence Cost (€)', 'Domestic Transport Cost (€)',
+    ]);
     th.font = { bold: true };
 
     for (const trip of summary.trip_detail) {
@@ -347,9 +436,14 @@ export async function exportToExcel(
         trip.number_of_instances,
         n(trip.per_instance_total_eur),
         n(trip.total_trip_cost_eur),
+        countryName(trip.destination_country_code),
+        trip.flight_cost_per_instance !== null ? n(trip.flight_cost_per_instance) : '',
+        trip.accommodation_cost_per_instance !== null ? n(trip.accommodation_cost_per_instance) : '',
+        trip.subsistence_cost_per_instance !== null ? n(trip.subsistence_cost_per_instance) : '',
+        trip.domestic_transport_per_instance !== null ? n(trip.domestic_transport_per_instance) : '',
       ]);
     }
-    for (const col of [4, 5]) {
+    for (const col of [4, 5, 7, 8, 9, 10]) {
       travelSheet.getColumn(col).numFmt = '#,##0.00';
     }
   }
