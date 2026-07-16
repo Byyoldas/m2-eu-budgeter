@@ -5,12 +5,16 @@
  *   Sheet 1: Budget Summary (category totals + Work Package breakdown; totals
  *            are formulas that SUM the detail sheets rather than static copies)
  *   Sheet 2: Gantt Chart (rendered PNG of the Work Package timeline)
- *   Sheet 3: Personnel Detail (salary/inflation input cells + formula-built
- *            Base Monthly cost; per-Work-Package cost is a genuine formula —
- *            SUMPRODUCT over a hidden per-month helper sheet that replicates
- *            the backend's month-by-month WP-overlap allocation, with yearly
- *            inflation compounding applied per month — plus a formula-derived
- *            Unattributed column that reconciles against the backend's total)
+ *   Sheet 3: Personnel Detail — a "WP Timelines" table (WP Start/End Month,
+ *            an inclusive Duration column, and a Person-Months column per
+ *            role reconciled against each role's raw employment length) sits
+ *            above the roles table (salary/inflation input cells + formula-
+ *            built Base Monthly cost; per-Work-Package cost is a genuine
+ *            formula — SUMPRODUCT over a hidden per-month helper sheet that
+ *            replicates the backend's month-by-month WP-overlap allocation,
+ *            with yearly inflation compounding applied per month — plus a
+ *            formula-derived Unattributed column that reconciles against the
+ *            backend's total)
  *   Sheet 4: Equipment Detail
  *   Sheet 5: Travel Detail
  *   Sheet 6: Other Direct Costs
@@ -144,11 +148,23 @@ export async function exportToExcel(
 
   const personnelExists = summary.role_detail.length > 0;
   const maxMonths = (config?.duration_years ?? 1) * 12;
-  // Personnel sheet layout: a small "WP Timelines" reference table at the top
-  // (rows 1-2 + one row per WP), then a blank row, then the roles table.
+  // Personnel sheet layout: a "WP Timelines" reference table at the top
+  // (rows 1-2 + one row per WP + a 3-row PM reconciliation block), then a
+  // blank row, then the roles table. The WP Timelines table now carries a
+  // Duration column plus one Person-Months (PM) column per role — each
+  // role's PM in a WP is that role's month-count allocation to the WP
+  // (same month-overlap/reciprocal-split logic as the cost formulas below,
+  // just without the salary/inflation/FTE factors), so the table doubles as
+  // a visible audit of the allocation rather than only the cost outcome.
   const personnelWpTimelineFirstRow = 3;
   const personnelWpTimelineLastRow = 2 + wpBudgets.length;
-  const personnelHeaderRow = personnelWpTimelineLastRow + 2;
+  const personnelWpTimelineDurationCol = 4; // D
+  const personnelWpTimelinePmStartCol = 5; // E.. — one column per role, in role_detail order
+  const personnelWpTimelineTotalPmRow = personnelWpTimelineLastRow + 1;
+  const personnelWpTimelineEmploymentRow = personnelWpTimelineLastRow + 2;
+  // Row 3 below (personnelWpTimelineLastRow + 3) is the "Reconciled?" row;
+  // + 1 blank row, + 1 header row brings us to personnelHeaderRow.
+  const personnelHeaderRow = personnelWpTimelineLastRow + 5;
   const personnelFirstDataRow = personnelHeaderRow + 1;
   const personnelLastRow = personnelFirstDataRow + summary.role_detail.length - 1;
   const personnelFixedCols = 7; // Role, Type, Salary(TRY), Increase%, FTE, Start, End
@@ -303,17 +319,84 @@ export async function exportToExcel(
     const persSheet = wb.addWorksheet('Personnel');
     persSheet.properties.defaultColWidth = 15;
 
-    // WP Timelines reference table (rows 1-2 + one row per WP).
+    // WP Timelines reference table (rows 1-2 + one row per WP), extended with
+    // a Duration column (End - Start + 1, inclusive of both ends — the same
+    // inclusive convention the month-overlap formulas below use, so there's
+    // no off-by-one drift between "how long is this WP" and "how many months
+    // of it does each role get") and one Person-Months (PM) column per role.
     persSheet.addRow(['Work Package Timelines']).font = { bold: true };
-    const wpTimelineHeader = persSheet.addRow(['WP', 'Start Month', 'End Month']);
+    const wpTimelineHeader = persSheet.addRow([
+      'WP', 'Start Month', 'End Month', 'Duration (Months)',
+      ...summary.role_detail.map((r) => `${r.role_label} (PM)`),
+    ]);
     wpTimelineHeader.font = { bold: true };
     wpBudgets.forEach((wp, i) => {
-      persSheet.addRow([
+      const wpTableRow = personnelWpTimelineFirstRow + i;
+      const row = persSheet.addRow([
         wpLabel(wp),
         config?.work_package_start_months[i] ?? 1,
         config?.work_package_end_months[i] ?? maxMonths,
       ]);
+      const durationCell = row.getCell(personnelWpTimelineDurationCol);
+      durationCell.value = { formula: `C${wpTableRow}-B${wpTableRow}+1` };
+      durationCell.numFmt = '0';
+
+      // Each role's Person-Months (PM) in this WP is an FTE-weighted month
+      // allocation — Person-Months = calendar months × FTE (e.g. 24 months
+      // at FTE 0.4 = 9.6 PM) — via SUMPRODUCT over every project month of
+      //   [month in role's Start-End] * [month in this WP's Start-End] *
+      //   [1/overlap-count that month] * [FTE]
+      // — the same month-overlap/reciprocal-split term the per-WP cost
+      // formula below uses (minus the salary/inflation factors), so a role
+      // split across simultaneously-active WPs gets its PM split the same
+      // way its cost is split.
+      summary.role_detail.forEach((_role, k) => {
+        const roleRow = personnelFirstDataRow + k;
+        const roleStartCell = `$F$${roleRow}`;
+        const roleEndCell = `$G$${roleRow}`;
+        const roleFteCell = `$E$${roleRow}`;
+        const wpStartCellSelf = `$B$${wpTableRow}`;
+        const wpEndCellSelf = `$C$${wpTableRow}`;
+        const col = personnelWpTimelinePmStartCol + k;
+        const cell = row.getCell(col);
+        cell.value = {
+          formula: `SUMPRODUCT((${helperMonthRange}>=${roleStartCell})*(${helperMonthRange}<=${roleEndCell})*(${helperMonthRange}>=${wpStartCellSelf})*(${helperMonthRange}<=${wpEndCellSelf})*${helperReciprocalRange})*${roleFteCell}`,
+        };
+        cell.numFmt = '0.00';
+      });
     });
+
+    // Reconciliation block: for each role, Total PM (summed down its column
+    // across every WP row above) must equal its FTE-weighted Employment
+    // Months ((End - Start + 1) × FTE) — proving no month was double-counted
+    // or dropped by the WP split, independent of the cost/inflation math.
+    const totalPmRow = persSheet.addRow(['Total PM (check)']);
+    totalPmRow.font = { italic: true };
+    const employmentRow = persSheet.addRow(['Employment Months']);
+    employmentRow.font = { italic: true };
+    const reconciledRow = persSheet.addRow(['Reconciled?']);
+    reconciledRow.font = { italic: true, bold: true };
+
+    summary.role_detail.forEach((_role, k) => {
+      const roleRow = personnelFirstDataRow + k;
+      const col = personnelWpTimelinePmStartCol + k;
+      const colLetterStr = colLetter(col);
+
+      const totalPmCell = totalPmRow.getCell(col);
+      totalPmCell.value = {
+        formula: `SUM(${colLetterStr}${personnelWpTimelineFirstRow}:${colLetterStr}${personnelWpTimelineLastRow})`,
+      };
+      totalPmCell.numFmt = '0.00';
+
+      const employmentCell = employmentRow.getCell(col);
+      employmentCell.value = { formula: `(G${roleRow}-F${roleRow}+1)*E${roleRow}` };
+      employmentCell.numFmt = '0.00';
+
+      reconciledRow.getCell(col).value = {
+        formula: `IF(${colLetterStr}${personnelWpTimelineTotalPmRow}=${colLetterStr}${personnelWpTimelineEmploymentRow},"OK","MISMATCH")`,
+      };
+    });
+
     persSheet.addRow([]);
 
     const headers = [
