@@ -1,5 +1,5 @@
 /**
- * Step 6 — Other Direct Costs (C3) + Subcontracting (B).
+ * Step 7 — Other Direct Costs (C3) + Subcontracting (B).
  * Regular C3 items, subcontracting lump sum, and CFS item management.
  */
 
@@ -254,7 +254,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
 
       <div className="screen-footer">
         <button className="btn btn--ghost" onClick={onBack}>← Back</button>
-        <button className="btn btn--primary btn--lg" onClick={onNext}>Next: Work Packages →</button>
+        <button className="btn btn--primary btn--lg" onClick={onNext}>Next: Review & Export →</button>
       </div>
 
       <CFSModal open={showCfsModal} onClose={() => setShowCfsModal(false)} />

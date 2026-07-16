@@ -131,6 +131,17 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
                 <td><strong>{fmt(total)}</strong></td>
               </tr>
             ))}
+            <tr className="review-table-wp-total">
+              <td><strong>Total</strong></td>
+              {wpBudgets.map((wp) => (
+                <td key={wp.work_package_id}><strong>{fmt(wp.total_eur)}</strong></td>
+              ))}
+              <td>
+                <strong>
+                  {fmt(wpBudgets.reduce((sum, wp) => sum + parseFloat(wp.total_eur), 0).toString())}
+                </strong>
+              </td>
+            </tr>
           </tbody>
           <tfoot>
             <tr className="review-table-divider">

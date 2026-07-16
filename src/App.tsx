@@ -31,11 +31,11 @@ import './App.css';
 const STEP_ORDER: Screen[] = [
   'project-setup',
   'budget-settings',
+  'work-packages',
   'personnel',
   'equipment',
   'travel',
   'other-costs',
-  'work-packages',
   'review-export',
 ];
 

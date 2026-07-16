@@ -8,6 +8,7 @@
  */
 
 import { useState } from 'react';
+import { useProjectStore } from '../store/projectStore';
 import { useBudgetSummary } from '../hooks/useBudgetSummary';
 import { addCfsItem, dismissCfsWarning } from '../ipc/commands';
 
@@ -17,19 +18,34 @@ interface CFSModalProps {
 }
 
 export function CFSModal({ open, onClose }: CFSModalProps) {
+  const projectConfig = useProjectStore((s) => s.projectConfig);
+  const wpCount = projectConfig?.work_package_count ?? 1;
+  const wpNames = projectConfig?.work_package_names ?? [];
   const { mutate, isLoading } = useBudgetSummary();
 
   const [amount, setAmount] = useState('');
   const [amountError, setAmountError] = useState('');
+  const [workPackageIds, setWorkPackageIds] = useState<number[]>([]);
+  const [wpError, setWpError] = useState('');
 
   const handleAdd = async () => {
     const n = parseFloat(amount);
+    let hasError = false;
     if (isNaN(n) || n <= 0) {
       setAmountError('Enter a valid amount greater than zero.');
-      return;
+      hasError = true;
+    } else {
+      setAmountError('');
     }
-    setAmountError('');
-    const result = await mutate(() => addCfsItem(amount));
+    if (workPackageIds.length === 0) {
+      setWpError('Select at least one Work Package.');
+      hasError = true;
+    } else {
+      setWpError('');
+    }
+    if (hasError) return;
+
+    const result = await mutate(() => addCfsItem(amount, workPackageIds));
     if (result) onClose();
   };
 
@@ -74,6 +90,29 @@ export function CFSModal({ open, onClose }: CFSModalProps) {
               />
               {amountError && <span className="form-error">{amountError}</span>}
             </div>
+          </div>
+
+          <div className="form-field">
+            <label className="form-label required">Work Package(s)</label>
+            <div className="checkbox-grid">
+              {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
+                <label key={wpId} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    value={wpId}
+                    checked={workPackageIds.includes(wpId)}
+                    onChange={(e) =>
+                      setWorkPackageIds((current) =>
+                        e.target.checked ? [...current, wpId] : current.filter((w) => w !== wpId)
+                      )
+                    }
+                  />
+                  {(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}
+                </label>
+              ))}
+            </div>
+            {wpError && <span className="form-error">{wpError}</span>}
+            <span className="form-hint">Cost is split evenly across all selected Work Packages.</span>
           </div>
         </div>
 

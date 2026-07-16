@@ -1,5 +1,5 @@
 /**
- * Step 4 — Equipment (Category C2).
+ * Step 5 — Equipment (Category C2).
  * Add/edit/delete equipment items. Live depreciation preview as user types.
  */
 

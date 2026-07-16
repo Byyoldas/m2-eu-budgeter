@@ -260,11 +260,11 @@ export type Screen =
 export const SCREENS: Screen[] = [
   'project-setup',
   'budget-settings',
+  'work-packages',
   'personnel',
   'equipment',
   'travel',
   'other-costs',
-  'work-packages',
   'review-export',
 ];
 

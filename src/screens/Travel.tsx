@@ -1,5 +1,5 @@
 /**
- * Step 5 — Travel (Category C1).
+ * Step 6 — Travel (Category C1).
  * Supports Itemized trips (flight + accommodation + subsistence + domestic) and Flat Amount trips.
  * Live cost preview as user fills the form.
  */

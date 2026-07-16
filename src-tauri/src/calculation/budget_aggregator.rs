@@ -116,33 +116,24 @@ pub fn calculate_total_direct_costs(
 
 // ─── CALC-16 ─────────────────────────────────────────────────────────────────
 
-/// CALC-16: Total Eligible Costs = (Total Direct Costs − Subcontracting) + Indirect Costs (E).
+/// CALC-16: Total Eligible Costs = Total Direct Costs + Indirect Costs (E).
 ///
-/// Category B (Subcontracting) is not an eligible cost under ERC rules: it is
-/// tracked as part of the project's total direct spend but must not count
-/// toward eligible costs or the requested EU contribution.
+/// Category B (Subcontracting) IS an eligible cost and counts toward the
+/// requested EU contribution — it's already included in `total_direct`
+/// (CALC-15: A + B + C1 + C2 + C3), so no further adjustment is needed here.
+/// It is excluded only from the indirect cost *base* (CALC-14), not from
+/// eligible costs.
 pub fn calculate_total_eligible_costs(
     total_direct: Decimal,
-    category_b_total: Decimal,
     category_e: Decimal,
 ) -> Result<Decimal, AppError> {
     if total_direct < Decimal::ZERO {
         return Err(calc_error("INTERNAL_CALC_ERROR", "Total direct costs is negative."));
     }
-    if category_b_total < Decimal::ZERO {
-        return Err(calc_error("INTERNAL_CALC_ERROR", "Subcontracting total is negative."));
-    }
     if category_e < Decimal::ZERO {
         return Err(calc_error("INTERNAL_CALC_ERROR", "Indirect costs is negative."));
     }
-    let eligible_direct = total_direct - category_b_total;
-    if eligible_direct < Decimal::ZERO {
-        return Err(calc_error(
-            "INTERNAL_CALC_ERROR",
-            "Subcontracting total exceeds total direct costs. This is a bug.",
-        ));
-    }
-    Ok(eligible_direct + category_e)
+    Ok(total_direct + category_e)
 }
 
 // ─── CALC-17 ─────────────────────────────────────────────────────────────────
@@ -255,21 +246,21 @@ mod tests {
 
     #[test]
     fn test_calc_16_total_plus_indirect() {
-        let result = calculate_total_eligible_costs(dec!(461067), Decimal::ZERO, dec!(115266.75)).unwrap();
+        let result = calculate_total_eligible_costs(dec!(461067), dec!(115266.75)).unwrap();
         assert_eq!(result, dec!(576333.75));
     }
 
     #[test]
-    fn test_calc_16_excludes_subcontracting() {
+    fn test_calc_16_includes_subcontracting() {
         // Total direct = 132000 (includes 15000 subcontracting), indirect = 10000.
-        // Eligible = (132000 - 15000) + 10000 = 127000.
-        let result = calculate_total_eligible_costs(dec!(132000), dec!(15000), dec!(10000)).unwrap();
-        assert_eq!(result, dec!(127000));
+        // Eligible = 132000 + 10000 = 142000. Subcontracting stays in.
+        let result = calculate_total_eligible_costs(dec!(132000), dec!(10000)).unwrap();
+        assert_eq!(result, dec!(142000));
     }
 
     #[test]
-    fn test_calc_16_subcontracting_exceeds_direct_returns_error() {
-        let result = calculate_total_eligible_costs(dec!(1000), dec!(2000), dec!(0));
+    fn test_calc_16_negative_total_direct_returns_error() {
+        let result = calculate_total_eligible_costs(dec!(-1), dec!(0));
         assert!(matches!(result, Err(AppError::Calculation { code, .. }) if code == "INTERNAL_CALC_ERROR"));
     }
 

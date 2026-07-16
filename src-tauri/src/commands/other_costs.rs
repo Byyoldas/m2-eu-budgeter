@@ -118,6 +118,7 @@ pub fn delete_other_cost(
 pub fn add_cfs_item(
     state: State<'_, AppState>,
     amount_eur: Decimal,
+    work_package_ids: Vec<u8>,
 ) -> Result<BudgetSummaryDto, AppError> {
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
@@ -138,13 +139,25 @@ pub fn add_cfs_item(
         ]));
     }
 
+    if work_package_ids.is_empty() {
+        return Err(AppError::Validation(vec![
+            crate::error::FieldError::new("work_package_ids", "NO_WORK_PACKAGE", "At least one Work Package must be selected."),
+        ]));
+    }
+    let work_package_count = project.config.work_package_count;
+    if work_package_ids.iter().any(|&wp| wp < 1 || wp > work_package_count) {
+        return Err(AppError::Validation(vec![
+            crate::error::FieldError::new("work_package_ids", "WP_OUT_OF_RANGE", "Select valid Work Packages."),
+        ]));
+    }
+
     let item = OtherDirectCostItem {
         id: Uuid::new_v4(),
         name: CFS_ITEM_NAME.to_string(),
         amount_eur,
         is_cfs_item: true,
         notes: Some("Auto-added: ERC requires a Certificate on Financial Statements when total budget exceeds €430,000.".to_string()),
-        work_package_ids: vec![],
+        work_package_ids,
     };
     project.other_cost_items.push(item);
     project.cfs_warning_dismissed = false; // Reset dismissal since we now have the item

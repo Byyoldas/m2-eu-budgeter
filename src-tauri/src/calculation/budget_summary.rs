@@ -267,7 +267,7 @@ pub fn calculate_budget_summary(
 
     // ── Step 7: Eligible Totals ──────────────────────────────────────────────
 
-    let total_eligible = calculate_total_eligible_costs(total_direct, category_b_total, indirect_result.total)?;
+    let total_eligible = calculate_total_eligible_costs(total_direct, indirect_result.total)?;
 
     // ── Step 8: EU Contribution ──────────────────────────────────────────────
 

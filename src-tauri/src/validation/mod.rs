@@ -300,7 +300,8 @@ pub fn validate_other_cost(
     // OC-01 items are not CFS items — they come through a different path.
     // The user cannot set is_cfs_item via the normal OC form.
     // (is_cfs_item is only set by the OC-02 auto-trigger flow, which bypasses
-    // this validator entirely and does not require a Work Package.)
+    // this validator entirely — it has its own inline Work Package validation
+    // in commands::other_costs::add_cfs_item.)
 
     errors.into_result()
 }

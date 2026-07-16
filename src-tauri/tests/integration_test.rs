@@ -558,9 +558,9 @@ fn test_it04_flat_amount_trip() {
 }
 
 #[test]
-fn test_it05_subcontracting_excluded_from_eligible_and_requested() {
-    // Subcontracting (B) is tracked in total direct costs but is not an eligible
-    // cost: it must not appear in total_eligible_costs or requested_eu_contribution.
+fn test_it05_subcontracting_included_in_eligible_and_requested_excluded_from_indirect_base() {
+    // Subcontracting (B) counts toward total_eligible_costs / requested_eu_contribution,
+    // but must not enter the indirect cost (E) base.
     let config = ProjectConfig {
         project_title: "Subcontracting Test".to_string(),
         pi_name: "PI".to_string(),
@@ -592,13 +592,13 @@ fn test_it05_subcontracting_excluded_from_eligible_and_requested() {
 
     assert_eq!(summary.category_b_total, dec!(20000));
     assert_eq!(summary.category_c3_total, dec!(5000));
-    // Indirect = 25% of (A + C1 + C2 + C3) = 25% of 5000 = 1250 (B excluded, as before).
+    // Indirect = 25% of (A + C1 + C2 + C3) = 25% of 5000 = 1250. B excluded from this base.
     assert_eq!(summary.category_e_total, dec!(1250));
     // Total direct = A + B + C1 + C2 + C3 = 0 + 20000 + 0 + 0 + 5000 = 25000.
     assert_eq!(summary.total_direct_costs, dec!(25000));
-    // Eligible = (total_direct - B) + E = (25000 - 20000) + 1250 = 6250. B must not appear.
-    assert_eq!(summary.total_eligible_costs, dec!(6250));
-    assert_eq!(summary.requested_eu_contribution, dec!(6250));
+    // Eligible = total_direct + E = 25000 + 1250 = 26250. B is included here.
+    assert_eq!(summary.total_eligible_costs, dec!(26250));
+    assert_eq!(summary.requested_eu_contribution, dec!(26250));
     // Subcontracting is tagged to WP1 and should appear in its per-WP budget line.
     let wp1 = summary.wp_budgets.iter().find(|w| w.work_package_id == 1).unwrap();
     assert_eq!(wp1.subcontracting_eur, dec!(20000));

@@ -223,7 +223,7 @@ export async function exportToExcel(
   const eligibleRow = summarySheet.addRow([
     'Total Eligible Costs',
     ...wpBudgets.map(() => ''),
-    { formula: `${totalColLetterBS}${directRow.number}-${totalColLetterBS}${bRow.number}+${totalColLetterBS}${eRow.number}` },
+    { formula: `${totalColLetterBS}${directRow.number}+${totalColLetterBS}${eRow.number}` },
   ]);
   eligibleRow.font = { bold: true };
 

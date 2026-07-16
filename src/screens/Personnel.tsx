@@ -1,5 +1,5 @@
 /**
- * Step 3 — Personnel (Category A).
+ * Step 4 — Personnel (Category A).
  * Lists existing roles, opens add/edit form, handles live preview.
  */
 

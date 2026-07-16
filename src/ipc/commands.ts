@@ -98,8 +98,8 @@ export const updateOtherCost = (id: string, input: OtherCostInput): Promise<Budg
 export const deleteOtherCost = (id: string): Promise<BudgetSummaryDto> =>
   invoke('delete_other_cost', { id });
 
-export const addCfsItem = (amountEur: string): Promise<BudgetSummaryDto> =>
-  invoke('add_cfs_item', { amount_eur: amountEur });
+export const addCfsItem = (amountEur: string, workPackageIds: number[]): Promise<BudgetSummaryDto> =>
+  invoke('add_cfs_item', { amount_eur: amountEur, work_package_ids: workPackageIds });
 
 export const removeCfsItem = (): Promise<BudgetSummaryDto> =>
   invoke('remove_cfs_item');
