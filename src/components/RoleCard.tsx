@@ -16,6 +16,7 @@ const ROLE_TYPE_LABELS: Record<string, string> = {
   Expert: 'Expert / Senior Researcher',
   PostDoc: 'Post-Doctoral Researcher',
   PhdStudent: 'PhD Student',
+  MscStudent: 'MSc Student',
   Admin: 'Administrative Staff',
 };
 

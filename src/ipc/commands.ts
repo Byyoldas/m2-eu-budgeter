@@ -98,8 +98,8 @@ export const updateOtherCost = (id: string, input: OtherCostInput): Promise<Budg
 export const deleteOtherCost = (id: string): Promise<BudgetSummaryDto> =>
   invoke('delete_other_cost', { id });
 
-export const addCfsItem = (amountEur: string, projectYear: number): Promise<BudgetSummaryDto> =>
-  invoke('add_cfs_item', { amount_eur: amountEur, project_year: projectYear });
+export const addCfsItem = (amountEur: string): Promise<BudgetSummaryDto> =>
+  invoke('add_cfs_item', { amount_eur: amountEur });
 
 export const removeCfsItem = (): Promise<BudgetSummaryDto> =>
   invoke('remove_cfs_item');
@@ -107,5 +107,5 @@ export const removeCfsItem = (): Promise<BudgetSummaryDto> =>
 export const dismissCfsWarning = (): Promise<BudgetSummaryDto> =>
   invoke('dismiss_cfs_warning');
 
-export const setSubcontracting = (amountEur: string): Promise<BudgetSummaryDto> =>
-  invoke('set_subcontracting', { amount_eur: amountEur });
+export const setSubcontracting = (amountEur: string, workPackageId: number): Promise<BudgetSummaryDto> =>
+  invoke('set_subcontracting', { amount_eur: amountEur, work_package_id: workPackageId });

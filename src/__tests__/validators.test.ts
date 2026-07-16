@@ -164,8 +164,8 @@ describe('personnelRoleSchema', () => {
     current_monthly_salary_try: '227900',
     fte_fraction: '0.70',
     inflation_rate_pct: '20',
-    active_years: [1, 2, 3, 4, 5],
-    work_package_ids: [],
+    start_month: 1,
+    end_month: 60,
   };
 
   it('accepts a valid PI role', () => {
@@ -227,14 +227,14 @@ describe('personnelRoleSchema', () => {
     expect(personnelRoleSchema.safeParse({ ...validData, inflation_rate_pct: '0' }).success).toBe(true);
   });
 
-  it('rejects empty active_years array', () => {
-    const r = personnelRoleSchema.safeParse({ ...validData, active_years: [] });
+  it('rejects end_month before start_month', () => {
+    const r = personnelRoleSchema.safeParse({ ...validData, start_month: 12, end_month: 1 });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues[0].message).toMatch(/at least one/i);
+    if (!r.success) expect(r.error.issues[0].message).toMatch(/on or after/i);
   });
 
-  it('accepts a single active year', () => {
-    expect(personnelRoleSchema.safeParse({ ...validData, active_years: [1] }).success).toBe(true);
+  it('accepts start_month equal to end_month', () => {
+    expect(personnelRoleSchema.safeParse({ ...validData, start_month: 5, end_month: 5 }).success).toBe(true);
   });
 });
 
@@ -247,7 +247,7 @@ describe('equipmentItemSchema', () => {
     useful_lifetime_months: 48,
     grant_usage_pct: '100',
     grant_usage_months: 55,
-    work_package_ids: [],
+    work_package_id: 1,
   };
 
   it('accepts a valid laptop item', () => {
@@ -296,6 +296,11 @@ describe('equipmentItemSchema', () => {
   it('accepts partial grant usage (80%)', () => {
     expect(equipmentItemSchema.safeParse({ ...validData, grant_usage_pct: '80' }).success).toBe(true);
   });
+
+  it('rejects a missing Work Package', () => {
+    const r = equipmentItemSchema.safeParse({ ...validData, work_package_id: undefined });
+    expect(r.success).toBe(false);
+  });
 });
 
 // ─── itemizedTripSchema ───────────────────────────────────────────────────────
@@ -309,8 +314,8 @@ describe('itemizedTripSchema', () => {
     number_of_nights: 4,
     number_of_days: 5,
     domestic_transport_per_instance_eur: '340',
-    project_year: 1,
     number_of_instances: 4,
+    work_package_ids: [1],
   };
 
   it('accepts a valid itemized trip', () => {
@@ -358,6 +363,12 @@ describe('itemizedTripSchema', () => {
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0].message).toMatch(/at least 1/i);
   });
+
+  it('rejects an empty Work Package selection', () => {
+    const r = itemizedTripSchema.safeParse({ ...validData, work_package_ids: [] });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0].message).toMatch(/at least one/i);
+  });
 });
 
 // ─── flatTripSchema ───────────────────────────────────────────────────────────
@@ -367,8 +378,8 @@ describe('flatTripSchema', () => {
     name: 'Domestic Conference',
     trip_kind: 'FlatAmount' as const,
     flat_amount_per_instance_eur: '2000',
-    project_year: 2,
     number_of_instances: 3,
+    work_package_ids: [1],
   };
 
   it('accepts a valid flat-amount trip', () => {
@@ -399,8 +410,8 @@ describe('tripSchema (discriminated union)', () => {
       number_of_nights: 4,
       number_of_days: 5,
       domestic_transport_per_instance_eur: '0',
-      project_year: 1,
       number_of_instances: 2,
+      work_package_ids: [1],
     });
     expect(r.success).toBe(true);
   });
@@ -410,8 +421,8 @@ describe('tripSchema (discriminated union)', () => {
       name: 'Flat',
       trip_kind: 'FlatAmount',
       flat_amount_per_instance_eur: '1500',
-      project_year: 3,
       number_of_instances: 1,
+      work_package_ids: [1],
     });
     expect(r.success).toBe(true);
   });
@@ -428,7 +439,7 @@ describe('otherCostSchema', () => {
   const validData = {
     name: 'MAXQDA License',
     amount_eur: '9870',
-    project_year: 1,
+    work_package_ids: [1],
   };
 
   it('accepts a valid C3 item', () => {
@@ -451,9 +462,10 @@ describe('otherCostSchema', () => {
     expect(r.success).toBe(false);
   });
 
-  it('rejects project_year = 0', () => {
-    const r = otherCostSchema.safeParse({ ...validData, project_year: 0 });
+  it('rejects an empty Work Package selection', () => {
+    const r = otherCostSchema.safeParse({ ...validData, work_package_ids: [] });
     expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0].message).toMatch(/at least one/i);
   });
 });
 
@@ -461,16 +473,11 @@ describe('otherCostSchema', () => {
 
 describe('cfsItemSchema', () => {
   it('accepts a valid CFS item', () => {
-    expect(cfsItemSchema.safeParse({ amount_eur: '12000', project_year: 4 }).success).toBe(true);
+    expect(cfsItemSchema.safeParse({ amount_eur: '12000' }).success).toBe(true);
   });
 
   it('rejects zero CFS amount', () => {
-    const r = cfsItemSchema.safeParse({ amount_eur: '0', project_year: 4 });
-    expect(r.success).toBe(false);
-  });
-
-  it('rejects project_year = 0', () => {
-    const r = cfsItemSchema.safeParse({ amount_eur: '12000', project_year: 0 });
+    const r = cfsItemSchema.safeParse({ amount_eur: '0' });
     expect(r.success).toBe(false);
   });
 });
@@ -479,16 +486,21 @@ describe('cfsItemSchema', () => {
 
 describe('subcontractingSchema', () => {
   it('accepts zero amount (no subcontracting)', () => {
-    expect(subcontractingSchema.safeParse({ amount_eur: '0' }).success).toBe(true);
+    expect(subcontractingSchema.safeParse({ amount_eur: '0', work_package_id: 1 }).success).toBe(true);
   });
 
   it('accepts positive subcontracting amount', () => {
-    expect(subcontractingSchema.safeParse({ amount_eur: '15000' }).success).toBe(true);
+    expect(subcontractingSchema.safeParse({ amount_eur: '15000', work_package_id: 1 }).success).toBe(true);
   });
 
   it('rejects negative amount', () => {
-    const r = subcontractingSchema.safeParse({ amount_eur: '-1' });
+    const r = subcontractingSchema.safeParse({ amount_eur: '-1', work_package_id: 1 });
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0].message).toMatch(/zero or a positive/i);
+  });
+
+  it('rejects a missing Work Package', () => {
+    const r = subcontractingSchema.safeParse({ amount_eur: '0', work_package_id: undefined });
+    expect(r.success).toBe(false);
   });
 });

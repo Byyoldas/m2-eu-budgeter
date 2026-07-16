@@ -17,25 +17,28 @@ import { useProjectStore } from '../store/projectStore';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-function makeZeroByYear(years = 5) {
-  return Array.from({ length: years }, (_, i) => ({
-    year: i + 1,
-    amount_eur: '0',
+function makeWpBudgets(): BudgetSummaryDto['wp_budgets'] {
+  return Array.from({ length: 3 }, (_, i) => ({
+    work_package_id: i + 1,
+    work_package_name: null,
+    personnel_eur: '0',
+    equipment_eur: '0',
+    travel_eur: '0',
+    other_costs_eur: '0',
+    subcontracting_eur: '0',
+    total_eur: '0',
   }));
 }
 
 function makeSummary(overrides: Partial<BudgetSummaryDto> = {}): BudgetSummaryDto {
   return {
-    category_a_by_year: makeZeroByYear(),
+    wp_budgets: makeWpBudgets(),
     category_a_total: '0',
     category_b_total: '0',
-    category_c1_by_year: makeZeroByYear(),
     category_c1_total: '0',
     category_c2_total: '0',
-    category_c3_by_year: makeZeroByYear(),
     category_c3_total: '0',
     indirect_base_total: '0',
-    category_e_by_year: makeZeroByYear(),
     category_e_total: '0',
     total_direct_costs: '0',
     total_eligible_costs: '100000',
@@ -60,8 +63,8 @@ function makeConfig(): ProjectConfigInput {
     duration_years: 5,
     work_package_count: 3,
     work_package_names: [null, null, null],
-    work_package_start_years: [1, 1, 1],
-    work_package_end_years: [5, 5, 5],
+    work_package_start_months: [1, 1, 1],
+    work_package_end_months: [60, 60, 60],
     default_inflation_rate_pct: '20',
     try_eur_rate: '50.62',
     indirect_cost_rate_pct: '25',
@@ -184,9 +187,14 @@ describe('setSummary', () => {
         id: 'uuid-1',
         role_label: 'PI',
         role_type: 'Pi',
+        current_monthly_salary_try: '227900',
+        inflation_rate_pct: '20',
         fte_fraction: '0.70',
+        start_month: 1,
+        end_month: 60,
         cost_lines: [],
         total_cost_eur: '45000',
+        wp_breakdown: [],
       }],
     });
     useProjectStore.getState().setSummary(s);
@@ -214,7 +222,7 @@ describe('setSummary', () => {
       trip_detail: [{
         id: 'uuid-3',
         name: 'India Fieldwork',
-        project_year: 1,
+        work_package_ids: [1],
         number_of_instances: 4,
         flight_cost_per_instance: '857',
         accommodation_cost_per_instance: '780',

@@ -1,5 +1,5 @@
 /**
- * Step 5 — Equipment (Category C2).
+ * Step 4 — Equipment (Category C2).
  * Add/edit/delete equipment items. Live depreciation preview as user types.
  */
 
@@ -34,7 +34,6 @@ function fmt(v: string): string {
 export function Equipment({ onNext, onBack }: EquipmentProps) {
   const items = useEquipmentItems();
   const projectConfig = useProjectStore((s) => s.projectConfig);
-  const duration = projectConfig?.duration_years ?? 5;
   const wpCount = projectConfig?.work_package_count ?? 1;
   const wpNames = projectConfig?.work_package_names ?? [];
 
@@ -46,11 +45,10 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
   const { preview, isLoading: previewLoading } = usePreview<EquipmentPreviewDto>();
 
   const {
-    register, handleSubmit, watch, reset, setValue,
+    register, handleSubmit, watch, reset,
     formState: { errors },
   } = useForm<EquipmentItemFormData>({
     resolver: zodResolver(equipmentItemSchema),
-    defaultValues: { work_package_ids: [] },
   });
 
   const watched = watch();
@@ -69,8 +67,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
           useful_lifetime_months: lifetime,
           grant_usage_pct: watched.grant_usage_pct,
           grant_usage_months: usageMonths,
-          year_of_purchase: watched.year_of_purchase ?? null,
-          work_package_ids: watched.work_package_ids ?? [],
+          work_package_id: Number(watched.work_package_id),
         })
       );
       setPreviewResult(result);
@@ -82,11 +79,11 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
     fieldErrors.find((e) => e.field === field)?.message ??
     (errors as Record<string, { message?: string }>)[field]?.message;
 
-  const openAdd = () => { reset({ work_package_ids: [] }); setEditingItem(null); setPreviewResult(null); setMode('add'); };
+  const openAdd = () => { reset({}); setEditingItem(null); setPreviewResult(null); setMode('add'); };
 
   const openEdit = (item: EquipmentItemDetailDto) => {
     setEditingItem(item);
-    reset({ name: item.name, work_package_ids: [] });
+    reset({ name: item.name });
     setPreviewResult(null);
     setMode('edit');
   };
@@ -103,8 +100,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
       useful_lifetime_months: Number(data.useful_lifetime_months),
       grant_usage_pct: data.grant_usage_pct,
       grant_usage_months: Number(data.grant_usage_months),
-      year_of_purchase: data.year_of_purchase ?? null,
-      work_package_ids: data.work_package_ids ?? [],
+      work_package_id: Number(data.work_package_id),
     };
     const command = editingItem
       ? () => updateEquipmentItem(editingItem.id, input)
@@ -170,34 +166,21 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
                 </div>
               </div>
               <div className="form-field">
-                <label htmlFor="year_purchase" className="form-label">Year of Purchase (within project)</label>
-                <select id="year_purchase" className="form-input" {...register('year_of_purchase', { setValueAs: (v) => v === '' ? null : Number(v) })}>
-                  <option value="">— Select year —</option>
-                  {Array.from({ length: duration }, (_, i) => i + 1).map((y) => (
-                    <option key={y} value={y}>Year {y}</option>
+                <label htmlFor="eq-wp" className="form-label required">
+                  Work Package (Select the WP in which the initial purchase is made)
+                </label>
+                <select
+                  id="eq-wp"
+                  className={`form-input${fieldError('work_package_id') ? ' form-input--error' : ''}`}
+                  {...register('work_package_id')}
+                >
+                  <option value="">— Select Work Package —</option>
+                  {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
+                    <option key={wpId} value={wpId}>{(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}</option>
                   ))}
                 </select>
-                <span className="form-hint">Used for per-year indirect cost distribution display only.</span>
+                {fieldError('work_package_id') && <span className="form-error">{fieldError('work_package_id')}</span>}
               </div>
-              {wpCount > 0 && (
-                <div className="form-field">
-                  <label className="form-label">Work Packages</label>
-                  <div className="checkbox-grid">
-                    {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
-                      <label key={wpId} className="checkbox-label">
-                        <input type="checkbox" value={wpId}
-                          onChange={(e) => {
-                            const current = watched.work_package_ids ?? [];
-                            setValue('work_package_ids', e.target.checked ? [...current, wpId] : current.filter((w) => w !== wpId));
-                          }}
-                          checked={(watched.work_package_ids ?? []).includes(wpId)}
-                        />
-                        {(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
             <div className="screen-footer">
               <button type="button" className="btn btn--ghost" onClick={() => setMode('list')}>Cancel</button>

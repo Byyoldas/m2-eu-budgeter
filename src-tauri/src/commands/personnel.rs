@@ -4,11 +4,11 @@ use tauri::State;
 use uuid::Uuid;
 use crate::AppState;
 use crate::domain::entities::{PersonnelRole, RoleType};
-use crate::domain::dto::{PersonnelRoleInputDto, BudgetSummaryDto, RoleCostPreviewDto, RoleCostLineDto};
+use crate::domain::dto::{PersonnelRoleInputDto, BudgetSummaryDto, RoleCostPreviewDto, RoleCostLineDto, WpCostAmountDto};
 use crate::validation::validate_personnel_role;
 use crate::calculation::calculate_budget_summary;
 use crate::calculation::salary_projection::{convert_try_to_eur, project_salary_chain};
-use crate::calculation::personnel_cost::calculate_personnel_cost_lines;
+use crate::calculation::personnel_cost::{calculate_personnel_cost_lines, allocate_personnel_cost_by_wp};
 use crate::persistence::auto_save;
 use crate::error::AppError;
 
@@ -36,8 +36,8 @@ pub fn add_personnel_role(
         current_monthly_salary_try: input.current_monthly_salary_try,
         fte_fraction: input.fte_fraction,
         inflation_rate_pct: input.inflation_rate_pct,
-        active_years: input.active_years,
-        work_package_ids: input.work_package_ids,
+        start_month: input.start_month,
+        end_month: input.end_month,
     };
     project.personnel_roles.push(role);
 
@@ -78,8 +78,8 @@ pub fn update_personnel_role(
     role.current_monthly_salary_try = input.current_monthly_salary_try;
     role.fte_fraction = input.fte_fraction;
     role.inflation_rate_pct = input.inflation_rate_pct;
-    role.active_years = input.active_years;
-    role.work_package_ids = input.work_package_ids;
+    role.start_month = input.start_month;
+    role.end_month = input.end_month;
 
     let summary = calculate_budget_summary(project, &state.rate_data)?;
 
@@ -137,7 +137,8 @@ pub fn preview_role_cost(
     let cost_lines = calculate_personnel_cost_lines(
         &projections,
         input.fte_fraction,
-        &input.active_years,
+        input.start_month,
+        input.end_month,
     )?;
 
     let total: rust_decimal::Decimal = cost_lines.iter().map(|l| l.annual_cost_eur).sum();
@@ -147,14 +148,35 @@ pub fn preview_role_cost(
         .map(|l| RoleCostLineDto {
             year: l.year,
             is_active: l.is_active,
+            active_months: l.active_months,
             monthly_salary_eur: l.monthly_salary_eur,
             annual_cost_eur: l.annual_cost_eur,
         })
         .collect();
 
+    let work_packages: Vec<(u8, u32, u32)> = (0..project.config.work_package_count as usize)
+        .map(|i| {
+            let id = (i + 1) as u8;
+            let start = project.config.work_package_start_months.get(i).copied().unwrap_or(1);
+            let end = project.config.work_package_end_months.get(i).copied().unwrap_or(project.config.duration_years as u32 * 12);
+            (id, start, end)
+        })
+        .collect();
+    let wp_breakdown = allocate_personnel_cost_by_wp(
+        &projections,
+        input.fte_fraction,
+        input.start_month,
+        input.end_month,
+        &work_packages,
+    )?;
+
     Ok(RoleCostPreviewDto {
         base_monthly_eur: base_eur,
         cost_lines: cost_line_dtos,
         total_cost_eur: total,
+        wp_breakdown: wp_breakdown
+            .into_iter()
+            .map(|w| WpCostAmountDto { work_package_id: w.work_package_id, amount_eur: w.amount_eur })
+            .collect(),
     })
 }

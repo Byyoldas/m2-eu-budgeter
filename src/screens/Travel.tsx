@@ -1,5 +1,5 @@
 /**
- * Step 6 — Travel (Category C1).
+ * Step 5 — Travel (Category C1).
  * Supports Itemized trips (flight + accommodation + subsistence + domestic) and Flat Amount trips.
  * Live cost preview as user fills the form.
  */
@@ -33,7 +33,6 @@ export function Travel({ onNext, onBack }: TravelProps) {
   const trips = useTrips();
   const projectConfig = useProjectStore((s) => s.projectConfig);
   const rateVersionId = projectConfig?.rate_version_id ?? 'from_2025_05_13';
-  const duration = projectConfig?.duration_years ?? 5;
   const wpCount = projectConfig?.work_package_count ?? 1;
   const wpNames = projectConfig?.work_package_names ?? [];
   const storedCountries = useProjectStore((s) => s.countries);
@@ -47,14 +46,14 @@ export function Travel({ onNext, onBack }: TravelProps) {
   const { mutate, isLoading, fieldErrors, formError } = useBudgetSummary();
   const { preview, isLoading: previewLoading } = usePreview<TripCostPreviewDto>();
 
-  const { register, handleSubmit, watch, reset } = useForm({
+  const { register, handleSubmit, watch, reset, setValue } = useForm({
     defaultValues: {
-      name: '', project_year: 1, number_of_instances: 1,
+      name: '', number_of_instances: 1,
       destination_country_code: '', one_way_distance_km: 0,
       number_of_nights: 1, number_of_days: 1,
       domestic_transport_per_instance_eur: '0',
       flat_amount_per_instance_eur: '',
-      work_package_id: '',
+      work_package_ids: [] as number[],
     },
   });
 
@@ -77,8 +76,8 @@ export function Travel({ onNext, onBack }: TravelProps) {
       if (tripKind === 'Itemized') {
         if (!watched.destination_country_code) { setPreviewResult(null); return; }
         input = {
-          name: watched.name, project_year: Number(watched.project_year),
-          number_of_instances: instances, work_package_id: watched.work_package_id ? Number(watched.work_package_id) : null,
+          name: watched.name,
+          number_of_instances: instances, work_package_ids: watched.work_package_ids ?? [],
           trip_type: {
             Itemized: {
               destination_country_code: watched.destination_country_code,
@@ -92,8 +91,8 @@ export function Travel({ onNext, onBack }: TravelProps) {
       } else {
         if (!parseFloat(watched.flat_amount_per_instance_eur)) { setPreviewResult(null); return; }
         input = {
-          name: watched.name, project_year: Number(watched.project_year),
-          number_of_instances: instances, work_package_id: watched.work_package_id ? Number(watched.work_package_id) : null,
+          name: watched.name,
+          number_of_instances: instances, work_package_ids: watched.work_package_ids ?? [],
           trip_type: { FlatAmount: { flat_amount_per_instance_eur: watched.flat_amount_per_instance_eur } },
         };
       }
@@ -110,7 +109,7 @@ export function Travel({ onNext, onBack }: TravelProps) {
     setEditingTrip(trip);
     const isItemized = trip.flight_cost_per_instance !== null;
     setTripKind(isItemized ? 'Itemized' : 'FlatAmount');
-    reset({ name: trip.name, project_year: trip.project_year, number_of_instances: trip.number_of_instances });
+    reset({ name: trip.name, number_of_instances: trip.number_of_instances, work_package_ids: trip.work_package_ids });
     setPreviewResult(null);
     setMode('edit');
   };
@@ -123,9 +122,9 @@ export function Travel({ onNext, onBack }: TravelProps) {
     let input: TripInput;
     if (tripKind === 'Itemized') {
       input = {
-        name: data.name, project_year: Number(data.project_year),
+        name: data.name,
         number_of_instances: Number(data.number_of_instances),
-        work_package_id: data.work_package_id ? Number(data.work_package_id) : null,
+        work_package_ids: data.work_package_ids ?? [],
         trip_type: {
           Itemized: {
             destination_country_code: data.destination_country_code,
@@ -138,9 +137,9 @@ export function Travel({ onNext, onBack }: TravelProps) {
       };
     } else {
       input = {
-        name: data.name, project_year: Number(data.project_year),
+        name: data.name,
         number_of_instances: Number(data.number_of_instances),
-        work_package_id: data.work_package_id ? Number(data.work_package_id) : null,
+        work_package_ids: data.work_package_ids ?? [],
         trip_type: { FlatAmount: { flat_amount_per_instance_eur: data.flat_amount_per_instance_eur } },
       };
     }
@@ -187,19 +186,9 @@ export function Travel({ onNext, onBack }: TravelProps) {
                 <input id="trip-name" type="text" placeholder="e.g. Conference EMNLP, Field work India" className={`form-input${fieldError('name') ? ' form-input--error' : ''}`} {...register('name')} />
                 {fieldError('name') && <span className="form-error">{fieldError('name')}</span>}
               </div>
-              <div className="form-row">
-                <div className="form-field">
-                  <label htmlFor="trip-year" className="form-label required">Project Year</label>
-                  <select id="trip-year" className="form-input" {...register('project_year', { valueAsNumber: true })}>
-                    {Array.from({ length: duration }, (_, i) => i + 1).map((y) => (
-                      <option key={y} value={y}>Year {y}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-field">
-                  <label htmlFor="trip-instances" className="form-label required">No. of Instances</label>
-                  <input id="trip-instances" type="number" min={1} className="form-input" {...register('number_of_instances', { valueAsNumber: true })} />
-                </div>
+              <div className="form-field">
+                <label htmlFor="trip-instances" className="form-label required">No. of Instances/Person</label>
+                <input id="trip-instances" type="number" min={1} className="form-input" {...register('number_of_instances', { valueAsNumber: true })} />
               </div>
 
               {tripKind === 'Itemized' && (
@@ -217,7 +206,16 @@ export function Travel({ onNext, onBack }: TravelProps) {
                   <div className="form-field">
                     <label htmlFor="distance" className="form-label required">One-Way Distance (km)</label>
                     <input id="distance" type="number" min={0} className="form-input" placeholder="e.g. 4800 for India" {...register('one_way_distance_km', { valueAsNumber: true })} />
-                    <span className="form-hint">Drives flight band selection. Use 0 for local/train trips (no flight).</span>
+                    <span className="form-hint">
+                      Drives flight band selection. Use 0 for local/train trips (no flight).{' '}
+                      <a
+                        href="https://commission.europa.eu/funding-and-tenders/procedures-guidelines-tenders/information-contractors-and-beneficiaries/calculate-unit-costs-eligible-travel-costs_en"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Distance Calculator ↗
+                      </a>
+                    </span>
                   </div>
                   <div className="form-row">
                     <div className="form-field">
@@ -246,17 +244,27 @@ export function Travel({ onNext, onBack }: TravelProps) {
                 </div>
               )}
 
-              {wpCount > 0 && (
-                <div className="form-field">
-                  <label htmlFor="trip-wp" className="form-label">Work Package</label>
-                  <select id="trip-wp" className="form-input" {...register('work_package_id')}>
-                    <option value="">— None —</option>
-                    {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
-                      <option key={wpId} value={wpId}>{(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}</option>
-                    ))}
-                  </select>
+              <div className="form-field">
+                <label className="form-label required">Work Package(s)</label>
+                <div className="checkbox-grid">
+                  {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
+                    <label key={wpId} className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        value={wpId}
+                        onChange={(e) => {
+                          const current = watched.work_package_ids ?? [];
+                          setValue('work_package_ids', e.target.checked ? [...current, wpId] : current.filter((w) => w !== wpId));
+                        }}
+                        checked={(watched.work_package_ids ?? []).includes(wpId)}
+                      />
+                      {(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}
+                    </label>
+                  ))}
                 </div>
-              )}
+                {fieldError('work_package_ids') && <span className="form-error">{fieldError('work_package_ids')}</span>}
+                <span className="form-hint">Cost is split evenly across all selected Work Packages.</span>
+              </div>
             </div>
             <div className="screen-footer">
               <button type="button" className="btn btn--ghost" onClick={() => setMode('list')}>Cancel</button>

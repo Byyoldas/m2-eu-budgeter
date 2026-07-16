@@ -13,9 +13,9 @@ const WP_COLORS = [
 
 interface WorkPackageGanttChartProps {
   names: (string | null | undefined)[];
-  startYears: number[];
-  endYears: number[];
-  durationYears: number;
+  startMonths: number[];
+  endMonths: number[];
+  durationMonths: number;
 }
 
 interface GanttRow {
@@ -30,7 +30,7 @@ function renderRangeLabel(props: unknown, rows: GanttRow[]) {
   const { x, y, width, height, index } = props as { x: number; y: number; width: number; height: number; index: number };
   const row = rows[index];
   if (!row || width < 24) return null;
-  const label = row.start === row.end ? `Y${row.start}` : `Y${row.start}–Y${row.end}`;
+  const label = row.start === row.end ? `M${row.start}` : `M${row.start}–M${row.end}`;
   return (
     <text
       x={x + width / 2}
@@ -46,14 +46,14 @@ function renderRangeLabel(props: unknown, rows: GanttRow[]) {
   );
 }
 
-export function WorkPackageGanttChart({ names, startYears, endYears, durationYears }: WorkPackageGanttChartProps) {
-  if (durationYears < 1 || names.length === 0) return null;
+export function WorkPackageGanttChart({ names, startMonths, endMonths, durationMonths }: WorkPackageGanttChartProps) {
+  if (durationMonths < 1 || names.length === 0) return null;
 
   const rows: GanttRow[] = names.map((name, i) => {
-    const rawStart = startYears[i] ?? 1;
-    const rawEnd = endYears[i] ?? durationYears;
-    const start = Math.min(Math.max(1, rawStart), durationYears);
-    const end = Math.min(Math.max(start, rawEnd), durationYears);
+    const rawStart = startMonths[i] ?? 1;
+    const rawEnd = endMonths[i] ?? durationMonths;
+    const start = Math.min(Math.max(1, rawStart), durationMonths);
+    const end = Math.min(Math.max(start, rawEnd), durationMonths);
     return {
       wp: name?.trim() ? name : `WP${i + 1}`,
       offset: start - 1,
@@ -63,7 +63,8 @@ export function WorkPackageGanttChart({ names, startYears, endYears, durationYea
     };
   });
 
-  const yearTicks = Array.from({ length: durationYears }, (_, i) => i);
+  // Tick every 12 months (one per project year) so the chart stays readable.
+  const yearTicks = Array.from({ length: Math.ceil(durationMonths / 12) }, (_, i) => i * 12);
 
   return (
     <div className="chart-container">
@@ -72,9 +73,9 @@ export function WorkPackageGanttChart({ names, startYears, endYears, durationYea
         <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
           <XAxis
             type="number"
-            domain={[0, durationYears]}
+            domain={[0, durationMonths]}
             ticks={yearTicks}
-            tickFormatter={(v: number) => `Year ${v + 1}`}
+            tickFormatter={(v: number) => `Year ${v / 12 + 1}`}
             tick={{ fontSize: 11, fill: '#94a3b8' }}
           />
           <YAxis type="category" dataKey="wp" width={110} tick={{ fontSize: 11, fill: '#94a3b8' }} />

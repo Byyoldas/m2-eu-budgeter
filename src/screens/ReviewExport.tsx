@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { saveProjectAs } from '../ipc/commands';
 import { useProjectStore, useSummary } from '../store/projectStore';
-import { BudgetYearBarChart } from '../components/BudgetYearBarChart';
+import { BudgetWpBarChart } from '../components/BudgetWpBarChart';
 import { BudgetRingChart } from '../components/BudgetRingChart';
 import { exportToExcel } from '../export/excelExporter';
 import { exportToCsv } from '../export/csvExporter';
@@ -72,16 +72,16 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
     }
   };
 
-  const categories = [
-    { label: 'A  Personnel', total: summary.category_a_total, byYear: summary.category_a_by_year },
-    { label: 'B  Subcontracting', total: summary.category_b_total, byYear: [] },
-    { label: 'C1 Travel', total: summary.category_c1_total, byYear: summary.category_c1_by_year },
-    { label: 'C2 Equipment', total: summary.category_c2_total, byYear: [] },
-    { label: 'C3 Other Direct', total: summary.category_c3_total, byYear: summary.category_c3_by_year },
-    { label: 'E  Indirect (25%)', total: summary.category_e_total, byYear: summary.category_e_by_year },
+  const categories: { label: string; total: string; key: keyof typeof summary.wp_budgets[number] | null }[] = [
+    { label: 'A  Personnel', total: summary.category_a_total, key: 'personnel_eur' },
+    { label: 'B  Subcontracting', total: summary.category_b_total, key: 'subcontracting_eur' },
+    { label: 'C1 Travel', total: summary.category_c1_total, key: 'travel_eur' },
+    { label: 'C2 Equipment', total: summary.category_c2_total, key: 'equipment_eur' },
+    { label: 'C3 Other Direct', total: summary.category_c3_total, key: 'other_costs_eur' },
+    { label: 'E  Indirect (25%)', total: summary.category_e_total, key: null },
   ];
 
-  const allYears = summary.category_a_by_year.map((y) => y.year);
+  const wpBudgets = summary.wp_budgets;
 
   return (
     <div className="screen">
@@ -115,39 +115,40 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
           <thead>
             <tr>
               <th>Category</th>
-              {allYears.map((y) => <th key={y}>Year {y}</th>)}
+              {wpBudgets.map((wp) => (
+                <th key={wp.work_package_id}>{wp.work_package_name || `WP${wp.work_package_id}`}</th>
+              ))}
               <th>Total</th>
             </tr>
           </thead>
           <tbody>
-            {categories.map(({ label, total, byYear }) => (
+            {categories.map(({ label, total, key }) => (
               <tr key={label}>
                 <td>{label}</td>
-                {allYears.map((yr) => {
-                  const entry = byYear.find((y) => y.year === yr);
-                  return <td key={yr}>{entry ? fmt(entry.amount_eur) : fmt(total)}</td>;
-                })}
+                {wpBudgets.map((wp) => (
+                  <td key={wp.work_package_id}>{key ? fmt(wp[key] as string) : '—'}</td>
+                ))}
                 <td><strong>{fmt(total)}</strong></td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="review-table-divider">
-              <td colSpan={allYears.length + 2} />
+              <td colSpan={wpBudgets.length + 2} />
             </tr>
             <tr>
               <td><strong>Total Direct Costs</strong></td>
-              {allYears.map((y) => <td key={y} />)}
+              {wpBudgets.map((wp) => <td key={wp.work_package_id} />)}
               <td><strong>{fmt(summary.total_direct_costs)}</strong></td>
             </tr>
             <tr>
               <td><strong>Total Eligible Costs</strong></td>
-              {allYears.map((y) => <td key={y} />)}
+              {wpBudgets.map((wp) => <td key={wp.work_package_id} />)}
               <td><strong>{fmt(summary.total_eligible_costs)}</strong></td>
             </tr>
             <tr className="review-table-grand">
               <td><strong>Requested EU Contribution</strong></td>
-              {allYears.map((y) => <td key={y} />)}
+              {wpBudgets.map((wp) => <td key={wp.work_package_id} />)}
               <td><strong>{fmt(summary.requested_eu_contribution)}</strong></td>
             </tr>
           </tfoot>
@@ -156,7 +157,7 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
 
       {/* Charts */}
       <div className="review-charts">
-        <BudgetYearBarChart />
+        <BudgetWpBarChart />
         <BudgetRingChart />
       </div>
 

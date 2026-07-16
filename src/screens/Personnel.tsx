@@ -1,5 +1,5 @@
 /**
- * Step 4 — Personnel (Category A).
+ * Step 3 — Personnel (Category A).
  * Lists existing roles, opens add/edit form, handles live preview.
  */
 
@@ -28,6 +28,7 @@ const ROLE_TYPES = [
   { value: 'Expert', label: 'Expert / Senior Researcher' },
   { value: 'PostDoc', label: 'Post-Doctoral Researcher' },
   { value: 'PhdStudent', label: 'PhD Student' },
+  { value: 'MscStudent', label: 'MSc Student' },
   { value: 'Admin', label: 'Administrative Staff' },
 ];
 
@@ -41,7 +42,7 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
   const roles = usePersonnelRoles();
   const projectConfig = useProjectStore((s) => s.projectConfig);
   const duration = projectConfig?.duration_years ?? 5;
-  const wpCount = projectConfig?.work_package_count ?? 1;
+  const durationMonths = duration * 12;
   const wpNames = projectConfig?.work_package_names ?? [];
 
   const [mode, setMode] = useState<Mode>('list');
@@ -56,14 +57,13 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
     handleSubmit,
     watch,
     reset,
-    setValue,
     formState: { errors },
   } = useForm<PersonnelRoleFormData>({
     resolver: zodResolver(personnelRoleSchema),
     defaultValues: {
       role_type: 'Expert',
-      active_years: [],
-      work_package_ids: [],
+      start_month: 1,
+      end_month: durationMonths,
       inflation_rate_pct: projectConfig?.default_inflation_rate_pct ?? '10',
     },
   });
@@ -76,7 +76,9 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
       const salary = parseFloat(watchedValues.current_monthly_salary_try);
       const fte = parseFloat(watchedValues.fte_fraction);
       const inflation = parseFloat(watchedValues.inflation_rate_pct);
-      if (!salary || !fte || isNaN(salary) || isNaN(fte) || isNaN(inflation)) {
+      const startMonth = Number(watchedValues.start_month);
+      const endMonth = Number(watchedValues.end_month);
+      if (!salary || !fte || isNaN(salary) || isNaN(fte) || isNaN(inflation) || !startMonth || !endMonth) {
         setPreviewResult(null);
         return;
       }
@@ -87,8 +89,8 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
           current_monthly_salary_try: watchedValues.current_monthly_salary_try,
           fte_fraction: watchedValues.fte_fraction,
           inflation_rate_pct: watchedValues.inflation_rate_pct,
-          active_years: watchedValues.active_years ?? [],
-          work_package_ids: watchedValues.work_package_ids ?? [],
+          start_month: startMonth,
+          end_month: endMonth,
         })
       );
       setPreviewResult(result);
@@ -99,8 +101,8 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
   const openAdd = () => {
     reset({
       role_type: 'Expert',
-      active_years: [],
-      work_package_ids: [],
+      start_month: 1,
+      end_month: durationMonths,
       inflation_rate_pct: projectConfig?.default_inflation_rate_pct ?? '10',
     });
     setEditingRole(null);
@@ -116,8 +118,8 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
       current_monthly_salary_try: '', // user must re-enter (not stored)
       fte_fraction: role.fte_fraction,
       inflation_rate_pct: projectConfig?.default_inflation_rate_pct ?? '10',
-      active_years: role.cost_lines.filter((l) => l.is_active).map((l) => l.year),
-      work_package_ids: [],
+      start_month: role.start_month,
+      end_month: role.end_month,
     });
     setPreviewResult(null);
     setMode('edit');
@@ -139,8 +141,8 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
       current_monthly_salary_try: data.current_monthly_salary_try,
       fte_fraction: data.fte_fraction,
       inflation_rate_pct: data.inflation_rate_pct,
-      active_years: data.active_years,
-      work_package_ids: data.work_package_ids,
+      start_month: data.start_month,
+      end_month: data.end_month,
     };
 
     const command = editingRole
@@ -161,6 +163,10 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
             value: fmt(l.annual_cost_eur),
           })),
         { label: 'Total cost', value: fmt(previewResult.total_cost_eur), highlight: true },
+        ...previewResult.wp_breakdown.map((w) => ({
+          label: `→ ${(wpNames[w.work_package_id - 1] as string | null) ?? `WP${w.work_package_id}`}`,
+          value: fmt(w.amount_eur),
+        })),
       ]
     : [];
 
@@ -255,56 +261,36 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
                 <span className="form-hint">Leave at project default or override per role.</span>
               </div>
 
-              <div className="form-field">
-                <label className="form-label required">Active Years</label>
-                <div className="checkbox-grid">
-                  {Array.from({ length: duration }, (_, i) => i + 1).map((year) => (
-                    <label key={year} className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        value={year}
-                        onChange={(e) => {
-                          const current = watchedValues.active_years ?? [];
-                          if (e.target.checked) {
-                            setValue('active_years', [...current, year].sort(), { shouldValidate: true });
-                          } else {
-                            setValue('active_years', current.filter((y) => y !== year), { shouldValidate: true });
-                          }
-                        }}
-                        checked={(watchedValues.active_years ?? []).includes(year)}
-                      />
-                      Year {year}
-                    </label>
-                  ))}
-                </div>
-                {fieldError('active_years') && <span className="form-error">{fieldError('active_years')}</span>}
-              </div>
-
-              {wpCount > 0 && (
+              <div className="form-row">
                 <div className="form-field">
-                  <label className="form-label">Work Packages</label>
-                  <div className="checkbox-grid">
-                    {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
-                      <label key={wpId} className="checkbox-label">
-                        <input
-                          type="checkbox"
-                          value={wpId}
-                          onChange={(e) => {
-                            const current = watchedValues.work_package_ids ?? [];
-                            if (e.target.checked) {
-                              setValue('work_package_ids', [...current, wpId]);
-                            } else {
-                              setValue('work_package_ids', current.filter((w) => w !== wpId));
-                            }
-                          }}
-                          checked={(watchedValues.work_package_ids ?? []).includes(wpId)}
-                        />
-                        {(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}
-                      </label>
-                    ))}
-                  </div>
+                  <label htmlFor="start_month" className="form-label required">Start Month</label>
+                  <input
+                    id="start_month"
+                    type="number"
+                    min={1}
+                    max={durationMonths}
+                    className={`form-input${fieldError('start_month') ? ' form-input--error' : ''}`}
+                    {...register('start_month', { valueAsNumber: true })}
+                  />
+                  {fieldError('start_month') && <span className="form-error">{fieldError('start_month')}</span>}
                 </div>
-              )}
+                <div className="form-field">
+                  <label htmlFor="end_month" className="form-label required">End Month</label>
+                  <input
+                    id="end_month"
+                    type="number"
+                    min={1}
+                    max={durationMonths}
+                    className={`form-input${fieldError('end_month') ? ' form-input--error' : ''}`}
+                    {...register('end_month', { valueAsNumber: true })}
+                  />
+                  {fieldError('end_month') && <span className="form-error">{fieldError('end_month')}</span>}
+                </div>
+              </div>
+              <span className="form-hint">
+                Project runs months 1–{durationMonths}. The Work Package(s) this role's cost is
+                charged to are determined automatically from this range.
+              </span>
             </div>
 
             <div className="screen-footer">

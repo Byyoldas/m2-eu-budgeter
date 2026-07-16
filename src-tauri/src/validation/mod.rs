@@ -19,7 +19,7 @@ use rust_decimal::Decimal;
 /// # Arguments
 /// * `dto` — The incoming role data from the frontend.
 /// * `existing_roles` — All roles already in the project (for uniqueness checks).
-/// * `duration_years` — Project duration (for active_years range check).
+/// * `duration_years` — Project duration (for start/end month range check).
 /// * `exclude_id` — Optional UUID string to exclude from uniqueness check (for updates).
 pub fn validate_personnel_role(
     dto: &PersonnelRoleInputDto,
@@ -88,25 +88,30 @@ pub fn validate_personnel_role(
         ));
     }
 
-    // At least one active year must be selected
-    if dto.active_years.is_empty() {
+    // Start month must not exceed end month
+    if dto.start_month > dto.end_month {
         errors.push(FieldError::new(
-            "active_years",
-            "NO_ACTIVE_YEARS",
-            "At least one project year must be selected.",
+            "start_month",
+            "INVALID_MONTH_RANGE",
+            "Start month must be on or before end month.",
         ));
     }
 
-    // All active years must be within project duration
-    for &year in &dto.active_years {
-        if year < 1 || year > duration_years {
-            errors.push(FieldError::new(
-                "active_years",
-                "YEAR_OUT_OF_RANGE",
-                format!("Year {year} is outside the project duration of {duration_years} years."),
-            ));
-            break; // One message is enough
-        }
+    // Both months must fall within the project duration
+    let max_month = duration_years as u32 * 12;
+    if dto.start_month < 1 || dto.start_month > max_month {
+        errors.push(FieldError::new(
+            "start_month",
+            "MONTH_OUT_OF_RANGE",
+            format!("Start month {} is outside the project duration of {max_month} months.", dto.start_month),
+        ));
+    }
+    if dto.end_month < 1 || dto.end_month > max_month {
+        errors.push(FieldError::new(
+            "end_month",
+            "MONTH_OUT_OF_RANGE",
+            format!("End month {} is outside the project duration of {max_month} months.", dto.end_month),
+        ));
     }
 
     errors.into_result()
@@ -118,6 +123,7 @@ pub fn validate_personnel_role(
 pub fn validate_equipment_item(
     dto: &EquipmentItemInputDto,
     duration_years: u8,
+    work_package_count: u8,
 ) -> Result<(), AppError> {
     let mut errors = ValidationErrors::default();
 
@@ -166,14 +172,12 @@ pub fn validate_equipment_item(
         ));
     }
 
-    if let Some(year) = dto.year_of_purchase {
-        if year < 1 || year > duration_years {
-            errors.push(FieldError::new(
-                "year_of_purchase",
-                "YEAR_OUT_OF_RANGE",
-                format!("Year of purchase {year} is outside the project duration."),
-            ));
-        }
+    if dto.work_package_id < 1 || dto.work_package_id > work_package_count {
+        errors.push(FieldError::new(
+            "work_package_id",
+            "WP_OUT_OF_RANGE",
+            "Select a valid Work Package.",
+        ));
     }
 
     errors.into_result()
@@ -182,20 +186,29 @@ pub fn validate_equipment_item(
 // ─── Trip Validation ──────────────────────────────────────────────────────────
 
 /// Validate a Trip input against all TR-01 constraints.
-pub fn validate_trip(dto: &TripInputDto, duration_years: u8) -> Result<(), AppError> {
+pub fn validate_trip(dto: &TripInputDto, work_package_count: u8) -> Result<(), AppError> {
     let mut errors = ValidationErrors::default();
 
     if dto.name.trim().is_empty() {
         errors.push(FieldError::new("name", "REQUIRED", "Trip name or purpose is required."));
     }
 
-    if dto.project_year < 1 || dto.project_year > duration_years {
+    if dto.work_package_ids.is_empty() {
         errors.push(FieldError::new(
-            "project_year",
-            "YEAR_OUT_OF_RANGE",
-            format!("Project year {y} is outside the project duration of {n} years.",
-                y = dto.project_year, n = duration_years),
+            "work_package_ids",
+            "NO_WORK_PACKAGE",
+            "At least one Work Package must be selected.",
         ));
+    }
+    for &wp in &dto.work_package_ids {
+        if wp < 1 || wp > work_package_count {
+            errors.push(FieldError::new(
+                "work_package_ids",
+                "WP_OUT_OF_RANGE",
+                "Select valid Work Packages.",
+            ));
+            break;
+        }
     }
 
     if dto.number_of_instances < 1 {
@@ -249,8 +262,8 @@ pub fn validate_trip(dto: &TripInputDto, duration_years: u8) -> Result<(), AppEr
 /// Validate an OtherDirectCostItem input against OC-01 constraints.
 pub fn validate_other_cost(
     dto: &OtherCostInputDto,
-    duration_years: u8,
-    existing_items: &[OtherDirectCostItem],
+    work_package_count: u8,
+    _existing_items: &[OtherDirectCostItem],
 ) -> Result<(), AppError> {
     let mut errors = ValidationErrors::default();
 
@@ -266,17 +279,28 @@ pub fn validate_other_cost(
         ));
     }
 
-    if dto.project_year < 1 || dto.project_year > duration_years {
+    if dto.work_package_ids.is_empty() {
         errors.push(FieldError::new(
-            "project_year",
-            "YEAR_OUT_OF_RANGE",
-            format!("Year {} is outside the project duration.", dto.project_year),
+            "work_package_ids",
+            "NO_WORK_PACKAGE",
+            "At least one Work Package must be selected.",
         ));
+    }
+    for &wp in &dto.work_package_ids {
+        if wp < 1 || wp > work_package_count {
+            errors.push(FieldError::new(
+                "work_package_ids",
+                "WP_OUT_OF_RANGE",
+                "Select valid Work Packages.",
+            ));
+            break;
+        }
     }
 
     // OC-01 items are not CFS items — they come through a different path.
     // The user cannot set is_cfs_item via the normal OC form.
-    // (is_cfs_item is only set by the OC-02 auto-trigger flow.)
+    // (is_cfs_item is only set by the OC-02 auto-trigger flow, which bypasses
+    // this validator entirely and does not require a Work Package.)
 
     errors.into_result()
 }
@@ -303,25 +327,26 @@ pub fn validate_project_config(dto: &crate::domain::dto::ProjectConfigDto) -> Re
         ));
     }
 
-    if !dto.work_package_start_years.is_empty() || !dto.work_package_end_years.is_empty() {
-        if dto.work_package_start_years.len() != dto.work_package_count as usize
-            || dto.work_package_end_years.len() != dto.work_package_count as usize
+    if !dto.work_package_start_months.is_empty() || !dto.work_package_end_months.is_empty() {
+        if dto.work_package_start_months.len() != dto.work_package_count as usize
+            || dto.work_package_end_months.len() != dto.work_package_count as usize
         {
             errors.push(FieldError::new(
-                "work_package_start_years",
+                "work_package_start_months",
                 "INVALID_WP_DURATION",
-                "Each Work Package must have a start and end year.",
+                "Each Work Package must have a start and end month.",
             ));
         } else {
-            for (i, (&start, &end)) in dto.work_package_start_years.iter()
-                .zip(dto.work_package_end_years.iter())
+            let max_month = dto.duration_years as u32 * 12;
+            for (i, (&start, &end)) in dto.work_package_start_months.iter()
+                .zip(dto.work_package_end_months.iter())
                 .enumerate()
             {
-                if start < 1 || end < 1 || start > dto.duration_years || end > dto.duration_years || start > end {
+                if start < 1 || end < 1 || start > max_month || end > max_month || start > end {
                     errors.push(FieldError::new(
-                        "work_package_start_years",
+                        "work_package_start_months",
                         "INVALID_WP_DURATION",
-                        format!("WP{} duration (Year {start}–{end}) is invalid for a {}-year project.", i + 1, dto.duration_years),
+                        format!("WP{} duration (Month {start}–{end}) is invalid for a {max_month}-month project.", i + 1),
                     ));
                     break;
                 }
@@ -381,6 +406,7 @@ mod tests {
     // ── Helper builders ────────────────────────────────────────────────────────
 
     fn make_config_dto(duration: u8) -> ProjectConfigDto {
+        let max_month = duration as u32 * 12;
         ProjectConfigDto {
             project_title: "Test Project".to_string(),
             pi_name: "Test PI".to_string(),
@@ -388,8 +414,8 @@ mod tests {
             duration_years: duration,
             work_package_count: 3,
             work_package_names: vec![None, None, None],
-            work_package_start_years: vec![1, 1, 1],
-            work_package_end_years: vec![duration, duration, duration],
+            work_package_start_months: vec![1, 1, 1],
+            work_package_end_months: vec![max_month, max_month, max_month],
             default_inflation_rate_pct: dec!(20),
             try_eur_rate: dec!(50.62),
             indirect_cost_rate_pct: dec!(25),
@@ -398,15 +424,15 @@ mod tests {
         }
     }
 
-    fn make_role_dto(label: &str, role_type: RoleType, salary: &str, fte: &str, inflation: &str, years: Vec<u8>) -> PersonnelRoleInputDto {
+    fn make_role_dto(label: &str, role_type: RoleType, salary: &str, fte: &str, inflation: &str, start_month: u32, end_month: u32) -> PersonnelRoleInputDto {
         PersonnelRoleInputDto {
             role_label: label.to_string(),
             role_type,
             current_monthly_salary_try: salary.parse().unwrap(),
             fte_fraction: fte.parse().unwrap(),
             inflation_rate_pct: inflation.parse().unwrap(),
-            active_years: years,
-            work_package_ids: vec![],
+            start_month,
+            end_month,
         }
     }
 
@@ -418,8 +444,8 @@ mod tests {
             current_monthly_salary_try: dec!(100000),
             fte_fraction: dec!(1),
             inflation_rate_pct: dec!(20),
-            active_years: vec![1, 2, 3, 4, 5],
-            work_package_ids: vec![],
+            start_month: 1,
+            end_month: 60,
         }
     }
 
@@ -430,12 +456,11 @@ mod tests {
             useful_lifetime_months: lifetime,
             grant_usage_pct: pct.parse().unwrap(),
             grant_usage_months: months,
-            year_of_purchase: None,
-            work_package_ids: vec![],
+            work_package_id: 1,
         }
     }
 
-    fn make_itemized_trip_dto(country: &str, year: u8) -> TripInputDto {
+    fn make_itemized_trip_dto(country: &str) -> TripInputDto {
         TripInputDto {
             name: "Test Trip".to_string(),
             trip_type: TripType::Itemized {
@@ -445,9 +470,8 @@ mod tests {
                 number_of_days: 5,
                 domestic_transport_per_instance_eur: dec!(0),
             },
-            project_year: year,
             number_of_instances: 1,
-            work_package_id: None,
+            work_package_ids: vec![1],
         }
     }
 
@@ -455,13 +479,13 @@ mod tests {
 
     #[test]
     fn test_val_pe_valid_pi_role() {
-        let dto = make_role_dto("PI", RoleType::Pi, "227900", "0.70", "20", vec![1,2,3,4,5]);
+        let dto = make_role_dto("PI", RoleType::Pi, "227900", "0.70", "20", 1, 60);
         assert!(validate_personnel_role(&dto, &[], 5, None).is_ok());
     }
 
     #[test]
     fn test_val_pe_empty_label_returns_error() {
-        let dto = make_role_dto("", RoleType::Expert, "100000", "1.0", "20", vec![1]);
+        let dto = make_role_dto("", RoleType::Expert, "100000", "1.0", "20", 1, 12);
         let result = validate_personnel_role(&dto, &[], 5, None);
         assert!(has_field_error(&result, "role_label", "REQUIRED"));
     }
@@ -469,7 +493,7 @@ mod tests {
     #[test]
     fn test_val_pe_duplicate_label_returns_error() {
         let existing = make_existing_role(Uuid::new_v4(), "PostDoc-1", RoleType::PostDoc);
-        let dto = make_role_dto("PostDoc-1", RoleType::Expert, "100000", "1.0", "20", vec![1]);
+        let dto = make_role_dto("PostDoc-1", RoleType::Expert, "100000", "1.0", "20", 1, 12);
         let result = validate_personnel_role(&dto, &[existing], 5, None);
         assert!(has_field_error(&result, "role_label", "DUPLICATE_LABEL"));
     }
@@ -477,7 +501,7 @@ mod tests {
     #[test]
     fn test_val_pe_duplicate_label_case_insensitive() {
         let existing = make_existing_role(Uuid::new_v4(), "postdoc-1", RoleType::PostDoc);
-        let dto = make_role_dto("POSTDOC-1", RoleType::Expert, "100000", "1.0", "20", vec![1]);
+        let dto = make_role_dto("POSTDOC-1", RoleType::Expert, "100000", "1.0", "20", 1, 12);
         let result = validate_personnel_role(&dto, &[existing], 5, None);
         assert!(has_field_error(&result, "role_label", "DUPLICATE_LABEL"));
     }
@@ -486,7 +510,7 @@ mod tests {
     fn test_val_pe_update_excludes_self_from_duplicate_check() {
         let id = Uuid::new_v4();
         let existing = make_existing_role(id, "PostDoc-1", RoleType::PostDoc);
-        let dto = make_role_dto("PostDoc-1", RoleType::PostDoc, "160000", "1.0", "20", vec![1, 2]);
+        let dto = make_role_dto("PostDoc-1", RoleType::PostDoc, "160000", "1.0", "20", 1, 24);
         let result = validate_personnel_role(&dto, &[existing], 5, Some(id));
         assert!(result.is_ok());
     }
@@ -494,7 +518,7 @@ mod tests {
     #[test]
     fn test_val_pe_second_pi_returns_error() {
         let existing = make_existing_role(Uuid::new_v4(), "PI", RoleType::Pi);
-        let dto = make_role_dto("PI-2", RoleType::Pi, "200000", "0.5", "20", vec![1]);
+        let dto = make_role_dto("PI-2", RoleType::Pi, "200000", "0.5", "20", 1, 12);
         let result = validate_personnel_role(&dto, &[existing], 5, None);
         assert!(has_entity_error(&result, "DUPLICATE_PI"));
     }
@@ -503,14 +527,14 @@ mod tests {
     fn test_val_pe_update_pi_does_not_trigger_duplicate_pi() {
         let id = Uuid::new_v4();
         let existing = make_existing_role(id, "PI", RoleType::Pi);
-        let dto = make_role_dto("PI", RoleType::Pi, "230000", "0.70", "20", vec![1,2,3,4,5]);
+        let dto = make_role_dto("PI", RoleType::Pi, "230000", "0.70", "20", 1, 60);
         let result = validate_personnel_role(&dto, &[existing], 5, Some(id));
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_val_pe_zero_salary_returns_error() {
-        let mut dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", vec![1]);
+        let mut dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", 1, 12);
         dto.current_monthly_salary_try = dec!(0);
         let result = validate_personnel_role(&dto, &[], 5, None);
         assert!(has_field_error(&result, "current_monthly_salary_try", "INVALID_SALARY_TRY"));
@@ -518,7 +542,7 @@ mod tests {
 
     #[test]
     fn test_val_pe_fte_zero_returns_error() {
-        let mut dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", vec![1]);
+        let mut dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", 1, 12);
         dto.fte_fraction = dec!(0);
         let result = validate_personnel_role(&dto, &[], 5, None);
         assert!(has_field_error(&result, "fte_fraction", "INVALID_FTE"));
@@ -526,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_val_pe_fte_over_one_returns_error() {
-        let mut dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", vec![1]);
+        let mut dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", 1, 12);
         dto.fte_fraction = dec!(1.1);
         let result = validate_personnel_role(&dto, &[], 5, None);
         assert!(has_field_error(&result, "fte_fraction", "INVALID_FTE"));
@@ -534,29 +558,29 @@ mod tests {
 
     #[test]
     fn test_val_pe_inflation_over_100_returns_error() {
-        let dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "101", vec![1]);
+        let dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "101", 1, 12);
         let result = validate_personnel_role(&dto, &[], 5, None);
         assert!(has_field_error(&result, "inflation_rate_pct", "INVALID_INFLATION_RATE"));
     }
 
     #[test]
-    fn test_val_pe_no_active_years_returns_error() {
-        let mut dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", vec![1]);
-        dto.active_years = vec![];
+    fn test_val_pe_start_after_end_returns_error() {
+        let dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", 12, 1);
         let result = validate_personnel_role(&dto, &[], 5, None);
-        assert!(has_field_error(&result, "active_years", "NO_ACTIVE_YEARS"));
+        assert!(has_field_error(&result, "start_month", "INVALID_MONTH_RANGE"));
     }
 
     #[test]
-    fn test_val_pe_year_out_of_range_returns_error() {
-        let dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", vec![6]);
+    fn test_val_pe_month_out_of_range_returns_error() {
+        // 5-year project: max month is 60.
+        let dto = make_role_dto("Expert-1", RoleType::Expert, "100000", "1.0", "20", 1, 61);
         let result = validate_personnel_role(&dto, &[], 5, None);
-        assert!(has_field_error(&result, "active_years", "YEAR_OUT_OF_RANGE"));
+        assert!(has_field_error(&result, "end_month", "MONTH_OUT_OF_RANGE"));
     }
 
     #[test]
     fn test_val_pe_multiple_errors_collected() {
-        let mut dto = make_role_dto("", RoleType::Expert, "100000", "1.0", "20", vec![]);
+        let mut dto = make_role_dto("", RoleType::Expert, "100000", "1.0", "20", 12, 1);
         dto.fte_fraction = dec!(0);
         let result = validate_personnel_role(&dto, &[], 5, None);
         if let Err(AppError::Validation(errs)) = result {
@@ -570,89 +594,98 @@ mod tests {
 
     #[test]
     fn test_val_eq_valid_laptop() {
-        assert!(validate_equipment_item(&make_equipment_dto("2500", 48, "100", 55), 5).is_ok());
+        assert!(validate_equipment_item(&make_equipment_dto("2500", 48, "100", 55), 5, 3).is_ok());
     }
 
     #[test]
     fn test_val_eq_empty_name_returns_error() {
         let mut dto = make_equipment_dto("2500", 48, "100", 55);
         dto.name = "".to_string();
-        assert!(has_field_error(&validate_equipment_item(&dto, 5), "name", "REQUIRED"));
+        assert!(has_field_error(&validate_equipment_item(&dto, 5, 3), "name", "REQUIRED"));
     }
 
     #[test]
     fn test_val_eq_zero_cost_returns_error() {
         let dto = make_equipment_dto("0", 48, "100", 55);
-        assert!(has_field_error(&validate_equipment_item(&dto, 5), "purchase_cost_eur", "INVALID_PURCHASE_COST"));
+        assert!(has_field_error(&validate_equipment_item(&dto, 5, 3), "purchase_cost_eur", "INVALID_PURCHASE_COST"));
     }
 
     #[test]
     fn test_val_eq_zero_lifetime_returns_error() {
         let dto = make_equipment_dto("2500", 0, "100", 36);
-        assert!(has_field_error(&validate_equipment_item(&dto, 5), "useful_lifetime_months", "INVALID_LIFETIME"));
+        assert!(has_field_error(&validate_equipment_item(&dto, 5, 3), "useful_lifetime_months", "INVALID_LIFETIME"));
     }
 
     #[test]
     fn test_val_eq_zero_usage_pct_returns_error() {
         let dto = make_equipment_dto("2500", 48, "0", 36);
-        assert!(has_field_error(&validate_equipment_item(&dto, 5), "grant_usage_pct", "INVALID_USAGE_PCT"));
+        assert!(has_field_error(&validate_equipment_item(&dto, 5, 3), "grant_usage_pct", "INVALID_USAGE_PCT"));
     }
 
     #[test]
     fn test_val_eq_usage_pct_over_100_returns_error() {
         let dto = make_equipment_dto("2500", 48, "101", 36);
-        assert!(has_field_error(&validate_equipment_item(&dto, 5), "grant_usage_pct", "INVALID_USAGE_PCT"));
+        assert!(has_field_error(&validate_equipment_item(&dto, 5, 3), "grant_usage_pct", "INVALID_USAGE_PCT"));
     }
 
     #[test]
     fn test_val_eq_zero_usage_months_returns_error() {
         let dto = make_equipment_dto("2500", 48, "100", 0);
-        assert!(has_field_error(&validate_equipment_item(&dto, 5), "grant_usage_months", "INVALID_USAGE_MONTHS"));
+        assert!(has_field_error(&validate_equipment_item(&dto, 5, 3), "grant_usage_months", "INVALID_USAGE_MONTHS"));
     }
 
     #[test]
     fn test_val_eq_usage_months_too_high_returns_error() {
         // 5-year project: max = 5*12+60 = 120. 121 should fail.
         let dto = make_equipment_dto("2500", 48, "100", 121);
-        assert!(has_field_error(&validate_equipment_item(&dto, 5), "grant_usage_months", "USAGE_MONTHS_TOO_HIGH"));
+        assert!(has_field_error(&validate_equipment_item(&dto, 5, 3), "grant_usage_months", "USAGE_MONTHS_TOO_HIGH"));
     }
 
     #[test]
-    fn test_val_eq_year_of_purchase_out_of_range() {
+    fn test_val_eq_work_package_out_of_range_returns_error() {
         let mut dto = make_equipment_dto("2500", 48, "100", 36);
-        dto.year_of_purchase = Some(6);
-        assert!(has_field_error(&validate_equipment_item(&dto, 5), "year_of_purchase", "YEAR_OUT_OF_RANGE"));
+        dto.work_package_id = 6;
+        assert!(has_field_error(&validate_equipment_item(&dto, 5, 3), "work_package_id", "WP_OUT_OF_RANGE"));
     }
 
     // ── validate_trip tests ────────────────────────────────────────────────────
 
     #[test]
     fn test_val_tr_valid_itemized_trip() {
-        assert!(validate_trip(&make_itemized_trip_dto("IN", 1), 5).is_ok());
+        assert!(validate_trip(&make_itemized_trip_dto("IN"), 3).is_ok());
     }
 
     #[test]
     fn test_val_tr_empty_name_returns_error() {
-        let mut dto = make_itemized_trip_dto("IN", 1);
+        let mut dto = make_itemized_trip_dto("IN");
         dto.name = "".to_string();
-        assert!(has_field_error(&validate_trip(&dto, 5), "name", "REQUIRED"));
+        assert!(has_field_error(&validate_trip(&dto, 3), "name", "REQUIRED"));
     }
 
     #[test]
-    fn test_val_tr_year_out_of_range_returns_error() {
-        assert!(has_field_error(&validate_trip(&make_itemized_trip_dto("FR", 6), 5), "project_year", "YEAR_OUT_OF_RANGE"));
+    fn test_val_tr_no_work_package_returns_error() {
+        let mut dto = make_itemized_trip_dto("FR");
+        dto.work_package_ids = vec![];
+        assert!(has_field_error(&validate_trip(&dto, 3), "work_package_ids", "NO_WORK_PACKAGE"));
+    }
+
+    #[test]
+    fn test_val_tr_work_package_out_of_range_returns_error() {
+        let mut dto = make_itemized_trip_dto("FR");
+        dto.work_package_ids = vec![9];
+        assert!(has_field_error(&validate_trip(&dto, 3), "work_package_ids", "WP_OUT_OF_RANGE"));
     }
 
     #[test]
     fn test_val_tr_zero_instances_returns_error() {
-        let mut dto = make_itemized_trip_dto("IN", 1);
+        let mut dto = make_itemized_trip_dto("IN");
         dto.number_of_instances = 0;
-        assert!(has_field_error(&validate_trip(&dto, 5), "number_of_instances", "INVALID_INSTANCES"));
+        assert!(has_field_error(&validate_trip(&dto, 3), "number_of_instances", "INVALID_INSTANCES"));
     }
 
     #[test]
     fn test_val_tr_itemized_empty_country_returns_error() {
-        assert!(has_field_error(&validate_trip(&make_itemized_trip_dto("", 1), 5), "destination_country_code", "REQUIRED"));
+        assert!(has_field_error(&validate_trip(&make_itemized_trip_dto(""), 3), "destination_country_code", "REQUIRED"));
     }
 
     #[test]
@@ -666,11 +699,10 @@ mod tests {
                 number_of_days: 5,
                 domestic_transport_per_instance_eur: dec!(0),
             },
-            project_year: 1,
             number_of_instances: 1,
-            work_package_id: None,
+            work_package_ids: vec![1],
         };
-        assert!(has_field_error(&validate_trip(&dto, 5), "number_of_nights", "INVALID_NIGHTS"));
+        assert!(has_field_error(&validate_trip(&dto, 3), "number_of_nights", "INVALID_NIGHTS"));
     }
 
     #[test]
@@ -680,11 +712,10 @@ mod tests {
             trip_type: TripType::FlatAmount {
                 flat_amount_per_instance_eur: dec!(0),
             },
-            project_year: 1,
             number_of_instances: 1,
-            work_package_id: None,
+            work_package_ids: vec![1],
         };
-        assert!(has_field_error(&validate_trip(&dto, 5), "flat_amount_per_instance_eur", "INVALID_FLAT_AMOUNT"));
+        assert!(has_field_error(&validate_trip(&dto, 3), "flat_amount_per_instance_eur", "INVALID_FLAT_AMOUNT"));
     }
 
     // ── validate_other_cost tests ──────────────────────────────────────────────
@@ -694,11 +725,10 @@ mod tests {
         let dto = OtherCostInputDto {
             name: "MAXQDA License".to_string(),
             amount_eur: dec!(9870),
-            project_year: 1,
             notes: None,
-            work_package_id: None,
+            work_package_ids: vec![1],
         };
-        assert!(validate_other_cost(&dto, 5, &[]).is_ok());
+        assert!(validate_other_cost(&dto, 3, &[]).is_ok());
     }
 
     #[test]
@@ -706,11 +736,10 @@ mod tests {
         let dto = OtherCostInputDto {
             name: "".to_string(),
             amount_eur: dec!(500),
-            project_year: 1,
             notes: None,
-            work_package_id: None,
+            work_package_ids: vec![1],
         };
-        assert!(has_field_error(&validate_other_cost(&dto, 5, &[]), "name", "REQUIRED"));
+        assert!(has_field_error(&validate_other_cost(&dto, 3, &[]), "name", "REQUIRED"));
     }
 
     #[test]
@@ -718,23 +747,32 @@ mod tests {
         let dto = OtherCostInputDto {
             name: "Item".to_string(),
             amount_eur: dec!(0),
-            project_year: 1,
             notes: None,
-            work_package_id: None,
+            work_package_ids: vec![1],
         };
-        assert!(has_field_error(&validate_other_cost(&dto, 5, &[]), "amount_eur", "INVALID_C3_AMOUNT"));
+        assert!(has_field_error(&validate_other_cost(&dto, 3, &[]), "amount_eur", "INVALID_C3_AMOUNT"));
     }
 
     #[test]
-    fn test_val_oc_year_out_of_range_returns_error() {
+    fn test_val_oc_no_work_package_returns_error() {
         let dto = OtherCostInputDto {
             name: "Item".to_string(),
             amount_eur: dec!(1000),
-            project_year: 6,
             notes: None,
-            work_package_id: None,
+            work_package_ids: vec![],
         };
-        assert!(has_field_error(&validate_other_cost(&dto, 5, &[]), "project_year", "YEAR_OUT_OF_RANGE"));
+        assert!(has_field_error(&validate_other_cost(&dto, 3, &[]), "work_package_ids", "NO_WORK_PACKAGE"));
+    }
+
+    #[test]
+    fn test_val_oc_work_package_out_of_range_returns_error() {
+        let dto = OtherCostInputDto {
+            name: "Item".to_string(),
+            amount_eur: dec!(1000),
+            notes: None,
+            work_package_ids: vec![9],
+        };
+        assert!(has_field_error(&validate_other_cost(&dto, 3, &[]), "work_package_ids", "WP_OUT_OF_RANGE"));
     }
 
     // ── validate_project_config tests ──────────────────────────────────────────
@@ -794,31 +832,31 @@ mod tests {
     fn test_val_cfg_wp_duration_empty_arrays_skip_validation() {
         // Backward compatibility: files saved before this field existed have empty arrays.
         let mut dto = make_config_dto(5);
-        dto.work_package_start_years = vec![];
-        dto.work_package_end_years = vec![];
+        dto.work_package_start_months = vec![];
+        dto.work_package_end_months = vec![];
         assert!(validate_project_config(&dto).is_ok());
     }
 
     #[test]
     fn test_val_cfg_wp_duration_length_mismatch_returns_error() {
         let mut dto = make_config_dto(5);
-        dto.work_package_start_years = vec![1, 1]; // only 2, but work_package_count is 3
-        assert!(has_field_error(&validate_project_config(&dto), "work_package_start_years", "INVALID_WP_DURATION"));
+        dto.work_package_start_months = vec![1, 1]; // only 2, but work_package_count is 3
+        assert!(has_field_error(&validate_project_config(&dto), "work_package_start_months", "INVALID_WP_DURATION"));
     }
 
     #[test]
     fn test_val_cfg_wp_duration_start_after_end_returns_error() {
         let mut dto = make_config_dto(5);
-        dto.work_package_start_years = vec![3, 1, 1];
-        dto.work_package_end_years = vec![2, 5, 5]; // WP1: start 3 > end 2
-        assert!(has_field_error(&validate_project_config(&dto), "work_package_start_years", "INVALID_WP_DURATION"));
+        dto.work_package_start_months = vec![30, 1, 1];
+        dto.work_package_end_months = vec![20, 60, 60]; // WP1: start 30 > end 20
+        assert!(has_field_error(&validate_project_config(&dto), "work_package_start_months", "INVALID_WP_DURATION"));
     }
 
     #[test]
-    fn test_val_cfg_wp_duration_year_out_of_range_returns_error() {
+    fn test_val_cfg_wp_duration_month_out_of_range_returns_error() {
         let mut dto = make_config_dto(5);
-        dto.work_package_end_years = vec![5, 5, 6]; // 6 exceeds 5-year duration
-        assert!(has_field_error(&validate_project_config(&dto), "work_package_start_years", "INVALID_WP_DURATION"));
+        dto.work_package_end_months = vec![60, 60, 61]; // 61 exceeds 60-month (5-year) duration
+        assert!(has_field_error(&validate_project_config(&dto), "work_package_start_months", "INVALID_WP_DURATION"));
     }
 
     // ── Assertion helpers ──────────────────────────────────────────────────────

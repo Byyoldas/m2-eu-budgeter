@@ -12,7 +12,7 @@ import { useAutoSave } from './hooks/useAutoSave';
 
 import { ProgressStepper } from './components/ProgressStepper';
 import { CategoryTotalsPanel } from './components/CategoryTotalsPanel';
-import { BudgetYearBarChart } from './components/BudgetYearBarChart';
+import { BudgetWpBarChart } from './components/BudgetWpBarChart';
 import { BudgetRingChart } from './components/BudgetRingChart';
 
 import { Welcome } from './screens/Welcome';
@@ -31,11 +31,11 @@ import './App.css';
 const STEP_ORDER: Screen[] = [
   'project-setup',
   'budget-settings',
-  'work-packages',
   'personnel',
   'equipment',
   'travel',
   'other-costs',
+  'work-packages',
   'review-export',
 ];
 
@@ -82,7 +82,7 @@ export function App() {
           <CategoryTotalsPanel />
           {summary && (
             <>
-              <BudgetYearBarChart />
+              <BudgetWpBarChart />
               <BudgetRingChart />
             </>
           )}

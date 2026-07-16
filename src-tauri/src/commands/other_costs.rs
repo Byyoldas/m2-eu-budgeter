@@ -27,16 +27,15 @@ pub fn add_other_cost(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
-    validate_other_cost(&input, project.config.duration_years, &project.other_cost_items)?;
+    validate_other_cost(&input, project.config.work_package_count, &project.other_cost_items)?;
 
     let item = OtherDirectCostItem {
         id: Uuid::new_v4(),
         name: input.name,
         amount_eur: input.amount_eur,
-        project_year: input.project_year,
         is_cfs_item: false, // regular items are never CFS items
         notes: input.notes,
-        work_package_id: input.work_package_id,
+        work_package_ids: input.work_package_ids,
     };
     project.other_cost_items.push(item);
 
@@ -64,7 +63,7 @@ pub fn update_other_cost(
             .filter(|i| i.id != id)
             .cloned()
             .collect();
-        validate_other_cost(&input, project.config.duration_years, &others)?;
+        validate_other_cost(&input, project.config.work_package_count, &others)?;
     }
 
     let item = project
@@ -75,9 +74,8 @@ pub fn update_other_cost(
 
     item.name = input.name;
     item.amount_eur = input.amount_eur;
-    item.project_year = input.project_year;
     item.notes = input.notes;
-    item.work_package_id = input.work_package_id;
+    item.work_package_ids = input.work_package_ids;
 
     let summary = calculate_budget_summary(project, &state.rate_data)?;
 
@@ -120,7 +118,6 @@ pub fn delete_other_cost(
 pub fn add_cfs_item(
     state: State<'_, AppState>,
     amount_eur: Decimal,
-    project_year: u8,
 ) -> Result<BudgetSummaryDto, AppError> {
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
@@ -141,20 +138,13 @@ pub fn add_cfs_item(
         ]));
     }
 
-    if project_year < 1 || project_year > project.config.duration_years {
-        return Err(AppError::Validation(vec![
-            crate::error::FieldError::new("project_year", "YEAR_OUT_OF_RANGE", "Year is outside the project duration."),
-        ]));
-    }
-
     let item = OtherDirectCostItem {
         id: Uuid::new_v4(),
         name: CFS_ITEM_NAME.to_string(),
         amount_eur,
-        project_year,
         is_cfs_item: true,
         notes: Some("Auto-added: ERC requires a Certificate on Financial Statements when total budget exceeds €430,000.".to_string()),
-        work_package_id: None,
+        work_package_ids: vec![],
     };
     project.other_cost_items.push(item);
     project.cfs_warning_dismissed = false; // Reset dismissal since we now have the item
@@ -210,6 +200,7 @@ pub fn dismiss_cfs_warning(
 pub fn set_subcontracting(
     state: State<'_, AppState>,
     amount_eur: Decimal,
+    work_package_id: u8,
 ) -> Result<BudgetSummaryDto, AppError> {
     if amount_eur < Decimal::ZERO {
         return Err(AppError::Validation(vec![
@@ -220,7 +211,14 @@ pub fn set_subcontracting(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
+    if work_package_id < 1 || work_package_id > project.config.work_package_count {
+        return Err(AppError::Validation(vec![
+            crate::error::FieldError::new("work_package_id", "WP_OUT_OF_RANGE", "Select a valid Work Package."),
+        ]));
+    }
+
     project.subcontracting.amount_eur = amount_eur;
+    project.subcontracting.work_package_id = work_package_id;
 
     let summary = calculate_budget_summary(project, &state.rate_data)?;
 

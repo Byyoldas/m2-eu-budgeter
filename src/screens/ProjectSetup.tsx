@@ -46,13 +46,15 @@ export function ProjectSetup({ onNext }: ProjectSetupProps) {
       ),
       // Default each WP to span the full project; preserved across edits unless
       // it would fall outside the (possibly changed) duration.
-      work_package_start_years: Array.from({ length: data.work_package_count }, (_, i) => {
-        const existing = projectConfig?.work_package_start_years?.[i];
-        return existing && existing <= data.duration_years ? existing : 1;
+      work_package_start_months: Array.from({ length: data.work_package_count }, (_, i) => {
+        const durationMonths = data.duration_years * 12;
+        const existing = projectConfig?.work_package_start_months?.[i];
+        return existing && existing <= durationMonths ? existing : 1;
       }),
-      work_package_end_years: Array.from({ length: data.work_package_count }, (_, i) => {
-        const existing = projectConfig?.work_package_end_years?.[i];
-        return existing && existing <= data.duration_years ? existing : data.duration_years;
+      work_package_end_months: Array.from({ length: data.work_package_count }, (_, i) => {
+        const durationMonths = data.duration_years * 12;
+        const existing = projectConfig?.work_package_end_months?.[i];
+        return existing && existing <= durationMonths ? existing : durationMonths;
       }),
       // Preserve budget settings from previous step (if editing)
       default_inflation_rate_pct: projectConfig?.default_inflation_rate_pct ?? '10',

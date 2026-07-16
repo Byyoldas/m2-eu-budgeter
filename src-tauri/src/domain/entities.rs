@@ -64,16 +64,16 @@ pub struct ProjectConfig {
     /// Optional descriptive names for each WP.
     /// Length must equal `work_package_count`; entries may be None.
     pub work_package_names: Vec<Option<String>>,
-    /// First project year (1-indexed) each WP is active, for the Gantt chart.
+    /// First project month (1-indexed) each WP is active, for the Gantt chart.
     /// Length must equal `work_package_count`. Defaults to empty for files saved
     /// before this field existed.
     #[serde(default)]
-    pub work_package_start_years: Vec<u8>,
-    /// Last project year (1-indexed, inclusive) each WP is active, for the Gantt chart.
+    pub work_package_start_months: Vec<u32>,
+    /// Last project month (1-indexed, inclusive) each WP is active, for the Gantt chart.
     /// Length must equal `work_package_count`. Defaults to empty for files saved
     /// before this field existed.
     #[serde(default)]
-    pub work_package_end_years: Vec<u8>,
+    pub work_package_end_months: Vec<u32>,
     /// Project-level default annual salary inflation rate (%).
     /// Stored as a percentage, e.g. 15.0 means 15%.
     #[serde(with = "rust_decimal::serde::str")]
@@ -100,6 +100,7 @@ pub enum RoleType {
     Expert,
     PostDoc,
     PhdStudent,
+    MscStudent,
     Admin,
 }
 
@@ -119,11 +120,10 @@ pub struct PersonnelRole {
     /// Per-role annual salary inflation rate (%). Range: [0, 100].
     #[serde(with = "rust_decimal::serde::str")]
     pub inflation_rate_pct: Decimal,
-    /// Project years in which this role is charged.
-    /// Values are 1-indexed (1 = Year 1). Must be non-empty.
-    pub active_years: Vec<u8>,
-    /// WP numbers this role is associated with (informational only in v1).
-    pub work_package_ids: Vec<u8>,
+    /// First project month (1-indexed) this role is charged.
+    pub start_month: u32,
+    /// Last project month (1-indexed, inclusive) this role is charged.
+    pub end_month: u32,
 }
 
 // ─── Equipment ────────────────────────────────────────────────────────────────
@@ -143,9 +143,8 @@ pub struct EquipmentItem {
     pub grant_usage_pct: Decimal,
     /// Months the item is in use during the grant period.
     pub grant_usage_months: u32,
-    /// Optional: project year of purchase (informational only).
-    pub year_of_purchase: Option<u8>,
-    pub work_package_ids: Vec<u8>,
+    /// The single Work Package this item's cost is charged to.
+    pub work_package_id: u8,
 }
 
 // ─── Travel ───────────────────────────────────────────────────────────────────
@@ -177,11 +176,11 @@ pub struct Trip {
     pub id: Uuid,
     pub name: String,
     pub trip_type: TripType,
-    /// Project year in which this trip occurs (1-indexed).
-    pub project_year: u8,
-    /// Number of times this trip occurs in the given year.
+    /// Number of times this trip occurs.
     pub number_of_instances: u32,
-    pub work_package_id: Option<u8>,
+    /// The Work Package(s) this trip's cost is charged to. Non-empty; cost is
+    /// split evenly across all listed WPs for the per-WP budget view.
+    pub work_package_ids: Vec<u8>,
 }
 
 // ─── Other Direct Costs (C3) ──────────────────────────────────────────────────
@@ -193,11 +192,13 @@ pub struct OtherDirectCostItem {
     pub name: String,
     #[serde(with = "rust_decimal::serde::str")]
     pub amount_eur: Decimal,
-    pub project_year: u8,
     /// True for the Certificate on Financial Statements item created by OC-02 auto-trigger.
     pub is_cfs_item: bool,
     pub notes: Option<String>,
-    pub work_package_id: Option<u8>,
+    /// The Work Package(s) this item's cost is charged to. Non-empty for regular
+    /// items; may be empty for the auto-triggered CFS item. Cost is split evenly
+    /// across all listed WPs for the per-WP budget view.
+    pub work_package_ids: Vec<u8>,
 }
 
 // ─── Subcontracting (B) ───────────────────────────────────────────────────────
@@ -207,12 +208,15 @@ pub struct OtherDirectCostItem {
 pub struct Subcontracting {
     #[serde(with = "rust_decimal::serde::str")]
     pub amount_eur: Decimal,
+    /// The Work Package this lump sum is charged to.
+    pub work_package_id: u8,
 }
 
 impl Default for Subcontracting {
     fn default() -> Self {
         Self {
             amount_eur: Decimal::ZERO,
+            work_package_id: 1,
         }
     }
 }

@@ -30,8 +30,8 @@ pub fn create_project(
         duration_years: config.duration_years,
         work_package_count: config.work_package_count,
         work_package_names: config.work_package_names,
-        work_package_start_years: config.work_package_start_years,
-        work_package_end_years: config.work_package_end_years,
+        work_package_start_months: config.work_package_start_months,
+        work_package_end_months: config.work_package_end_months,
         default_inflation_rate_pct: config.default_inflation_rate_pct,
         try_eur_rate: config.try_eur_rate,
         indirect_cost_rate_pct: config.indirect_cost_rate_pct,
@@ -66,8 +66,8 @@ pub fn update_project_config(
     project.config.duration_years = config.duration_years;
     project.config.work_package_count = config.work_package_count;
     project.config.work_package_names = config.work_package_names;
-    project.config.work_package_start_years = config.work_package_start_years;
-    project.config.work_package_end_years = config.work_package_end_years;
+    project.config.work_package_start_months = config.work_package_start_months;
+    project.config.work_package_end_months = config.work_package_end_months;
     project.config.default_inflation_rate_pct = config.default_inflation_rate_pct;
     project.config.try_eur_rate = config.try_eur_rate;
     project.config.indirect_cost_rate_pct = config.indirect_cost_rate_pct;

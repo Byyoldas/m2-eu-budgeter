@@ -23,9 +23,9 @@ pub struct ProjectConfigDto {
     pub work_package_count: u8,
     pub work_package_names: Vec<Option<String>>,
     #[serde(default)]
-    pub work_package_start_years: Vec<u8>,
+    pub work_package_start_months: Vec<u32>,
     #[serde(default)]
-    pub work_package_end_years: Vec<u8>,
+    pub work_package_end_months: Vec<u32>,
     #[serde(with = "rust_decimal::serde::str")]
     pub default_inflation_rate_pct: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
@@ -46,8 +46,8 @@ pub struct PersonnelRoleInputDto {
     pub fte_fraction: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
     pub inflation_rate_pct: Decimal,
-    pub active_years: Vec<u8>,
-    pub work_package_ids: Vec<u8>,
+    pub start_month: u32,
+    pub end_month: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,17 +59,15 @@ pub struct EquipmentItemInputDto {
     #[serde(with = "rust_decimal::serde::str")]
     pub grant_usage_pct: Decimal,
     pub grant_usage_months: u32,
-    pub year_of_purchase: Option<u8>,
-    pub work_package_ids: Vec<u8>,
+    pub work_package_id: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TripInputDto {
     pub name: String,
     pub trip_type: TripType,
-    pub project_year: u8,
     pub number_of_instances: u32,
-    pub work_package_id: Option<u8>,
+    pub work_package_ids: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,17 +75,16 @@ pub struct OtherCostInputDto {
     pub name: String,
     #[serde(with = "rust_decimal::serde::str")]
     pub amount_eur: Decimal,
-    pub project_year: u8,
     pub notes: Option<String>,
-    pub work_package_id: Option<u8>,
+    pub work_package_ids: Vec<u8>,
 }
 
 // ─── Output / Result DTOs ─────────────────────────────────────────────────────
 
-/// Year + amount pair, used in per-category year breakdowns.
+/// A Work Package's share of some cost, used in per-WP breakdowns.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct YearCostDto {
-    pub year: u8,
+pub struct WpCostAmountDto {
+    pub work_package_id: u8,
     #[serde(with = "rust_decimal::serde::str")]
     pub amount_eur: Decimal,
 }
@@ -97,6 +94,8 @@ pub struct YearCostDto {
 pub struct RoleCostLineDto {
     pub year: u8,
     pub is_active: bool,
+    /// Number of months (0-12) of the role's Start/End Month period that fall in this year.
+    pub active_months: u8,
     #[serde(with = "rust_decimal::serde::str")]
     pub monthly_salary_eur: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
@@ -109,11 +108,21 @@ pub struct PersonnelRoleDetailDto {
     pub id: Uuid,
     pub role_label: String,
     pub role_type: RoleType,
+    /// Current monthly gross salary in TRY (raw input, exposed for exports that
+    /// need to rebuild the salary-projection formula rather than a static total).
+    #[serde(with = "rust_decimal::serde::str")]
+    pub current_monthly_salary_try: Decimal,
+    /// Per-role annual salary inflation rate (%), raw input (see above).
+    #[serde(with = "rust_decimal::serde::str")]
+    pub inflation_rate_pct: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
     pub fte_fraction: Decimal,
+    pub start_month: u32,
+    pub end_month: u32,
     pub cost_lines: Vec<RoleCostLineDto>,
     #[serde(with = "rust_decimal::serde::str")]
     pub total_cost_eur: Decimal,
+    pub wp_breakdown: Vec<WpCostAmountDto>,
 }
 
 /// Live preview returned by `preview_role_cost` (shown while typing, before save).
@@ -125,6 +134,7 @@ pub struct RoleCostPreviewDto {
     pub cost_lines: Vec<RoleCostLineDto>,
     #[serde(with = "rust_decimal::serde::str")]
     pub total_cost_eur: Decimal,
+    pub wp_breakdown: Vec<WpCostAmountDto>,
 }
 
 /// Depreciation result for one equipment item.
@@ -160,10 +170,9 @@ pub struct OtherCostItemDetailDto {
     pub name: String,
     #[serde(with = "rust_decimal::serde::str")]
     pub amount_eur: Decimal,
-    pub project_year: u8,
     pub is_cfs_item: bool,
     pub notes: Option<String>,
-    pub work_package_id: Option<u8>,
+    pub work_package_ids: Vec<u8>,
 }
 
 /// Cost breakdown for one trip.
@@ -171,7 +180,7 @@ pub struct OtherCostItemDetailDto {
 pub struct TripDetailDto {
     pub id: Uuid,
     pub name: String,
-    pub project_year: u8,
+    pub work_package_ids: Vec<u8>,
     pub number_of_instances: u32,
     /// Per-instance cost details (None for flat-amount trips that have no breakdown).
     pub flight_cost_per_instance: Option<String>,
@@ -217,33 +226,49 @@ pub enum CfsStatus {
     RequiredAndUnaddressed,
 }
 
+/// A Work Package's total cost broken down by category.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WpBudgetDto {
+    pub work_package_id: u8,
+    pub work_package_name: Option<String>,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub personnel_eur: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub equipment_eur: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub travel_eur: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub other_costs_eur: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub subcontracting_eur: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub total_eur: Decimal,
+}
+
 /// The complete budget summary returned after every mutation.
 /// This is the primary output of CALC-19.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BudgetSummaryDto {
-    // Category breakdowns by year
-    pub category_a_by_year: Vec<YearCostDto>,
+    pub wp_budgets: Vec<WpBudgetDto>,
+
     #[serde(with = "rust_decimal::serde::str")]
     pub category_a_total: Decimal,
 
     #[serde(with = "rust_decimal::serde::str")]
     pub category_b_total: Decimal,
 
-    pub category_c1_by_year: Vec<YearCostDto>,
     #[serde(with = "rust_decimal::serde::str")]
     pub category_c1_total: Decimal,
 
     #[serde(with = "rust_decimal::serde::str")]
     pub category_c2_total: Decimal,
 
-    pub category_c3_by_year: Vec<YearCostDto>,
     #[serde(with = "rust_decimal::serde::str")]
     pub category_c3_total: Decimal,
 
     // Indirect costs (E)
     #[serde(with = "rust_decimal::serde::str")]
     pub indirect_base_total: Decimal,
-    pub category_e_by_year: Vec<YearCostDto>,
     #[serde(with = "rust_decimal::serde::str")]
     pub category_e_total: Decimal,
 
@@ -289,7 +314,7 @@ mod tests {
 
     #[test]
     fn personnel_role_input_deserializes_frontend_json() {
-        for role_type in ["Pi", "Expert", "PostDoc", "PhdStudent", "Admin"] {
+        for role_type in ["Pi", "Expert", "PostDoc", "PhdStudent", "MscStudent", "Admin"] {
             let json = format!(
                 r#"{{
                     "role_label": "PostDoc-1",
@@ -297,8 +322,8 @@ mod tests {
                     "current_monthly_salary_try": "151860",
                     "fte_fraction": "1.0",
                     "inflation_rate_pct": "15",
-                    "active_years": [1, 2],
-                    "work_package_ids": [1]
+                    "start_month": 1,
+                    "end_month": 24
                 }}"#
             );
             let result: Result<PersonnelRoleInputDto, _> = serde_json::from_str(&json);
@@ -311,9 +336,8 @@ mod tests {
         let json = r#"{
             "name": "MAXQDA License",
             "amount_eur": "9870",
-            "project_year": 1,
             "notes": null,
-            "work_package_id": null
+            "work_package_ids": [1]
         }"#;
         let result: Result<OtherCostInputDto, _> = serde_json::from_str(json);
         assert!(result.is_ok(), "OtherCostInputDto failed to deserialize: {:?}", result.err());
@@ -332,9 +356,8 @@ mod tests {
                     "domestic_transport_per_instance_eur": "0"
                 }
             },
-            "project_year": 1,
             "number_of_instances": 4,
-            "work_package_id": null
+            "work_package_ids": [1]
         }"#;
         let result: Result<TripInputDto, _> = serde_json::from_str(json);
         assert!(result.is_ok(), "Itemized TripInputDto failed to deserialize: {:?}", result.err());
@@ -350,9 +373,8 @@ mod tests {
                     "flat_amount_per_instance_eur": "2000"
                 }
             },
-            "project_year": 2,
             "number_of_instances": 3,
-            "work_package_id": null
+            "work_package_ids": [1, 2]
         }"#;
         let result: Result<TripInputDto, _> = serde_json::from_str(json);
         assert!(result.is_ok(), "FlatAmount TripInputDto failed to deserialize: {:?}", result.err());

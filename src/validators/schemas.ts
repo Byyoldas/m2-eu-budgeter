@@ -67,7 +67,7 @@ export type BudgetSettingsFormData = z.infer<typeof budgetSettingsSchema>;
 
 export const personnelRoleSchema = z.object({
   role_label: z.string().min(1, 'Role label is required.'),
-  role_type: z.enum(['Pi', 'Expert', 'PostDoc', 'PhdStudent', 'Admin'] as const),
+  role_type: z.enum(['Pi', 'Expert', 'PostDoc', 'PhdStudent', 'MscStudent', 'Admin'] as const),
   current_monthly_salary_try: decimalStr('Monthly salary (TRY)'),
   fte_fraction: z
     .string()
@@ -81,8 +81,11 @@ export const personnelRoleSchema = z.object({
       const n = parseFloat(v);
       return !isNaN(n) && n >= 0 && n <= 100;
     }, { message: 'Inflation rate must be between 0% and 100%.' }),
-  active_years: z.array(z.number().int().positive()).min(1, 'Select at least one active year.'),
-  work_package_ids: z.array(z.number().int().positive()),
+  start_month: z.coerce.number().int().min(1, 'Start month must be at least 1.'),
+  end_month: z.coerce.number().int().min(1, 'End month must be at least 1.'),
+}).refine((data) => data.end_month >= data.start_month, {
+  message: 'End month must be on or after start month.',
+  path: ['end_month'],
 });
 
 export type PersonnelRoleFormData = z.infer<typeof personnelRoleSchema>;
@@ -100,8 +103,7 @@ export const equipmentItemSchema = z.object({
       return !isNaN(n) && n > 0 && n <= 100;
     }, { message: 'Grant usage must be between 0% (exclusive) and 100%.' }),
   grant_usage_months: z.coerce.number().int().min(1, 'Usage months must be at least 1.'),
-  year_of_purchase: z.coerce.number().int().positive().nullable().optional(),
-  work_package_ids: z.array(z.number().int().positive()),
+  work_package_id: z.coerce.number().int().positive('Select a Work Package.'),
 });
 
 export type EquipmentItemFormData = z.infer<typeof equipmentItemSchema>;
@@ -116,18 +118,16 @@ export const itemizedTripSchema = z.object({
   number_of_nights: z.coerce.number().int().min(1, 'At least 1 night required.'),
   number_of_days: z.coerce.number().int().min(1, 'At least 1 day required.'),
   domestic_transport_per_instance_eur: nonNegDecimalStr('Domestic transport'),
-  project_year: z.coerce.number().int().min(1),
   number_of_instances: z.coerce.number().int().min(1, 'At least 1 instance required.'),
-  work_package_id: z.coerce.number().int().positive().nullable().optional(),
+  work_package_ids: z.array(z.number().int().positive()).min(1, 'Select at least one Work Package.'),
 });
 
 export const flatTripSchema = z.object({
   name: z.string().min(1, 'Trip name is required.'),
   trip_kind: z.literal('FlatAmount'),
   flat_amount_per_instance_eur: decimalStr('Flat amount'),
-  project_year: z.coerce.number().int().min(1),
   number_of_instances: z.coerce.number().int().min(1, 'At least 1 instance required.'),
-  work_package_id: z.coerce.number().int().positive().nullable().optional(),
+  work_package_ids: z.array(z.number().int().positive()).min(1, 'Select at least one Work Package.'),
 });
 
 export const tripSchema = z.discriminatedUnion('trip_kind', [itemizedTripSchema, flatTripSchema]);
@@ -138,9 +138,8 @@ export type TripFormData = z.infer<typeof tripSchema>;
 export const otherCostSchema = z.object({
   name: z.string().min(1, 'Item name is required.'),
   amount_eur: decimalStr('Amount'),
-  project_year: z.coerce.number().int().min(1),
   notes: z.string().nullable().optional(),
-  work_package_id: z.coerce.number().int().positive().nullable().optional(),
+  work_package_ids: z.array(z.number().int().positive()).min(1, 'Select at least one Work Package.'),
 });
 
 export type OtherCostFormData = z.infer<typeof otherCostSchema>;
@@ -149,7 +148,6 @@ export type OtherCostFormData = z.infer<typeof otherCostSchema>;
 
 export const cfsItemSchema = z.object({
   amount_eur: decimalStr('CFS amount'),
-  project_year: z.coerce.number().int().min(1),
 });
 
 export type CfsItemFormData = z.infer<typeof cfsItemSchema>;
@@ -158,6 +156,7 @@ export type CfsItemFormData = z.infer<typeof cfsItemSchema>;
 
 export const subcontractingSchema = z.object({
   amount_eur: nonNegDecimalStr('Subcontracting amount'),
+  work_package_id: z.coerce.number().int().positive('Select a Work Package.'),
 });
 
 export type SubcontractingFormData = z.infer<typeof subcontractingSchema>;

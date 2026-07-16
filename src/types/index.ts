@@ -5,7 +5,7 @@
 
 // ─── Enums ─────────────────────────────────────────────────────────────────────
 
-export type RoleType = 'Pi' | 'Expert' | 'PostDoc' | 'PhdStudent' | 'Admin';
+export type RoleType = 'Pi' | 'Expert' | 'PostDoc' | 'PhdStudent' | 'MscStudent' | 'Admin';
 
 export type CfsStatus =
   | 'NOT_REQUIRED'
@@ -42,8 +42,8 @@ export interface ProjectConfigInput {
   duration_years: number;
   work_package_count: number;
   work_package_names: (string | null)[];
-  work_package_start_years: number[];
-  work_package_end_years: number[];
+  work_package_start_months: number[];
+  work_package_end_months: number[];
   default_inflation_rate_pct: string; // Decimal
   try_eur_rate: string;               // Decimal
   indirect_cost_rate_pct: string;     // Decimal
@@ -57,8 +57,8 @@ export interface PersonnelRoleInput {
   current_monthly_salary_try: string; // Decimal
   fte_fraction: string;               // Decimal
   inflation_rate_pct: string;         // Decimal
-  active_years: number[];
-  work_package_ids: number[];
+  start_month: number;
+  end_month: number;
 }
 
 export interface EquipmentItemInput {
@@ -67,36 +67,34 @@ export interface EquipmentItemInput {
   useful_lifetime_months: number;
   grant_usage_pct: string;         // Decimal
   grant_usage_months: number;
-  year_of_purchase: number | null;
-  work_package_ids: number[];
+  work_package_id: number;
 }
 
 export interface TripInput {
   name: string;
   trip_type: TripType;
-  project_year: number;
   number_of_instances: number;
-  work_package_id: number | null;
+  work_package_ids: number[];
 }
 
 export interface OtherCostInput {
   name: string;
   amount_eur: string;  // Decimal
-  project_year: number;
   notes: string | null;
-  work_package_id: number | null;
+  work_package_ids: number[];
 }
 
 // ─── Output DTOs (backend → frontend) ────────────────────────────────────────
 
-export interface YearCostDto {
-  year: number;
+export interface WpCostAmountDto {
+  work_package_id: number;
   amount_eur: string; // Decimal
 }
 
 export interface RoleCostLineDto {
   year: number;
   is_active: boolean;
+  active_months: number;
   monthly_salary_eur: string; // Decimal
   annual_cost_eur: string;    // Decimal
 }
@@ -105,15 +103,21 @@ export interface PersonnelRoleDetailDto {
   id: string; // UUID
   role_label: string;
   role_type: RoleType;
+  current_monthly_salary_try: string; // Decimal
+  inflation_rate_pct: string; // Decimal
   fte_fraction: string; // Decimal
+  start_month: number;
+  end_month: number;
   cost_lines: RoleCostLineDto[];
   total_cost_eur: string; // Decimal
+  wp_breakdown: WpCostAmountDto[];
 }
 
 export interface RoleCostPreviewDto {
   base_monthly_eur: string; // Decimal
   cost_lines: RoleCostLineDto[];
   total_cost_eur: string;   // Decimal
+  wp_breakdown: WpCostAmountDto[];
 }
 
 export interface EquipmentItemDetailDto {
@@ -136,16 +140,15 @@ export interface OtherCostItemDetailDto {
   id: string; // UUID
   name: string;
   amount_eur: string; // Decimal
-  project_year: number;
   is_cfs_item: boolean;
   notes: string | null;
-  work_package_id: number | null;
+  work_package_ids: number[];
 }
 
 export interface TripDetailDto {
   id: string; // UUID
   name: string;
-  project_year: number;
+  work_package_ids: number[];
   number_of_instances: number;
   flight_cost_per_instance: string | null;
   accommodation_cost_per_instance: string | null;
@@ -168,23 +171,31 @@ export interface TripCostPreviewDto {
   subsistence_rate_eur: string | null;
 }
 
+export interface WpBudgetDto {
+  work_package_id: number;
+  work_package_name: string | null;
+  personnel_eur: string;      // Decimal
+  equipment_eur: string;      // Decimal
+  travel_eur: string;         // Decimal
+  other_costs_eur: string;    // Decimal
+  subcontracting_eur: string; // Decimal
+  total_eur: string;          // Decimal
+}
+
 export interface BudgetSummaryDto {
+  wp_budgets: WpBudgetDto[];
   // Personnel (A)
-  category_a_by_year: YearCostDto[];
   category_a_total: string;
   // Subcontracting (B)
   category_b_total: string;
   // Travel (C1)
-  category_c1_by_year: YearCostDto[];
   category_c1_total: string;
   // Equipment (C2)
   category_c2_total: string;
   // Other Direct Costs (C3)
-  category_c3_by_year: YearCostDto[];
   category_c3_total: string;
   // Indirect (E)
   indirect_base_total: string;
-  category_e_by_year: YearCostDto[];
   category_e_total: string;
   // Totals
   total_direct_costs: string;
@@ -249,11 +260,11 @@ export type Screen =
 export const SCREENS: Screen[] = [
   'project-setup',
   'budget-settings',
-  'work-packages',
   'personnel',
   'equipment',
   'travel',
   'other-costs',
+  'work-packages',
   'review-export',
 ];
 

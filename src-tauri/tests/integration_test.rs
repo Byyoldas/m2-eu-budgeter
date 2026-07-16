@@ -4,15 +4,15 @@
 //! complete `Project` entities and passing them through `calculate_budget_summary`.
 //!
 //! Test data is drawn from the workbook sample project (IT-01 scenario):
-//!   - 5-year ERC-CoG project
-//!   - PI: 227,900 TRY/month, FTE 0.70, all 5 years, 20% inflation
-//!   - PostDoc-1: 151,860 TRY/month, FTE 1.0, years 2-5, 20% inflation
-//!   - Expert-1: 138,000 TRY/month, FTE 0.40, year 1, 20% inflation
+//!   - 5-year ERC-CoG project (60 months)
+//!   - PI: 227,900 TRY/month, FTE 0.70, months 1-60 (all 5 years), 20% inflation
+//!   - PostDoc-1: 151,860 TRY/month, FTE 1.0, months 13-60 (years 2-5), 20% inflation
+//!   - Expert-1: 138,000 TRY/month, FTE 0.40, months 1-12 (year 1), 20% inflation
 //!   - Laptop: €2,500, 48m lifetime, 100%, 55m use → capped at €2,500
 //!   - Audio recorder: €60, 60m lifetime, 100%, 36m → €36
-//!   - India fieldwork: 4× per year, year 1, 5800km, 4 nights, 5 days, €340 domestic
-//!   - Vienna conference: 3× year 2, 2100km, 5 nights, 6 days, €0 domestic
-//!   - Publications budget: C3 item, years 3/4/5, €5000/year
+//!   - India fieldwork: 4× per year, 5800km, 4 nights, 5 days, €340 domestic
+//!   - Vienna conference: 3×, 2100km, 5 nights, 6 days, €0 domestic
+//!   - Publications budget: 3 C3 items, €5000 each
 //!   - TRY/EUR: 50.62, inflation: 20%, indirect: 25%, rate: v_from_2025_05_13
 
 use erc_budget_lib::domain::entities::*;
@@ -64,8 +64,8 @@ fn make_sample_project() -> Project {
         duration_years: 5,
         work_package_count: 3,
         work_package_names: vec![None, None, None],
-        work_package_start_years: vec![1, 1, 1],
-        work_package_end_years: vec![5, 5, 5],
+        work_package_start_months: vec![1, 1, 1],
+        work_package_end_months: vec![60, 60, 60],
         default_inflation_rate_pct: dec!(20),
         try_eur_rate: dec!(50.62),
         indirect_cost_rate_pct: dec!(25),
@@ -73,7 +73,7 @@ fn make_sample_project() -> Project {
         call_opening_date: None,
     };
 
-    // PI: 227,900 TRY/month, FTE 0.70, all 5 years, 20% inflation
+    // PI: 227,900 TRY/month, FTE 0.70, months 1-60 (all 5 years), 20% inflation
     let pi = PersonnelRole {
         id: Uuid::new_v4(),
         role_label: "PI".to_string(),
@@ -81,11 +81,11 @@ fn make_sample_project() -> Project {
         current_monthly_salary_try: dec!(227900),
         fte_fraction: dec!(0.70),
         inflation_rate_pct: dec!(20),
-        active_years: vec![1, 2, 3, 4, 5],
-        work_package_ids: vec![],
+        start_month: 1,
+        end_month: 60,
     };
 
-    // PostDoc-1: 151,860 TRY/month, FTE 1.0, years 2-5
+    // PostDoc-1: 151,860 TRY/month, FTE 1.0, months 13-60 (years 2-5)
     let postdoc = PersonnelRole {
         id: Uuid::new_v4(),
         role_label: "PostDoc-1".to_string(),
@@ -93,11 +93,11 @@ fn make_sample_project() -> Project {
         current_monthly_salary_try: dec!(151860),
         fte_fraction: dec!(1.0),
         inflation_rate_pct: dec!(20),
-        active_years: vec![2, 3, 4, 5],
-        work_package_ids: vec![],
+        start_month: 13,
+        end_month: 60,
     };
 
-    // Expert-1: 138,000 TRY/month, FTE 0.40, year 1 only
+    // Expert-1: 138,000 TRY/month, FTE 0.40, months 1-12 (year 1 only)
     let expert = PersonnelRole {
         id: Uuid::new_v4(),
         role_label: "Expert-1".to_string(),
@@ -105,8 +105,8 @@ fn make_sample_project() -> Project {
         current_monthly_salary_try: dec!(138000),
         fte_fraction: dec!(0.40),
         inflation_rate_pct: dec!(20),
-        active_years: vec![1],
-        work_package_ids: vec![],
+        start_month: 1,
+        end_month: 12,
     };
 
     // Equipment: Laptop - should be capped
@@ -117,8 +117,7 @@ fn make_sample_project() -> Project {
         useful_lifetime_months: 48,
         grant_usage_pct: dec!(100),
         grant_usage_months: 55,
-        year_of_purchase: Some(1),
-        work_package_ids: vec![],
+        work_package_id: 1,
     };
 
     // Equipment: Audio recorder - NOT capped
@@ -129,11 +128,10 @@ fn make_sample_project() -> Project {
         useful_lifetime_months: 60,
         grant_usage_pct: dec!(100),
         grant_usage_months: 36,
-        year_of_purchase: Some(1),
-        work_package_ids: vec![],
+        work_package_id: 1,
     };
 
-    // Travel: India fieldwork, year 1, 4 instances, 5800km
+    // Travel: India fieldwork, 4 instances, 5800km
     // per instance: €857 + (4×€195=€780) + (5×€50=€250) + €340 = €2,227
     // total: €2,227 × 4 = €8,908
     let india_trip = Trip {
@@ -146,12 +144,11 @@ fn make_sample_project() -> Project {
             number_of_days: 5,
             domestic_transport_per_instance_eur: dec!(340),
         },
-        project_year: 1,
         number_of_instances: 4,
-        work_package_id: None,
+        work_package_ids: vec![1],
     };
 
-    // Travel: Vienna conference, year 2, 3 instances, 2100km
+    // Travel: Vienna conference, 3 instances, 2100km
     // per instance: €429 + (5×€158=€790) + (6×€131=€786) = €2,005
     // total: €2,005 × 3 = €6,015
     let vienna_trip = Trip {
@@ -164,38 +161,34 @@ fn make_sample_project() -> Project {
             number_of_days: 6,
             domestic_transport_per_instance_eur: dec!(0),
         },
-        project_year: 2,
         number_of_instances: 3,
-        work_package_id: None,
+        work_package_ids: vec![2],
     };
 
-    // C3 items: publications years 3, 4, 5
+    // C3 items: publications
     let pub3 = OtherDirectCostItem {
         id: Uuid::new_v4(),
         name: "Publications Year 3".to_string(),
         amount_eur: dec!(5000),
-        project_year: 3,
         is_cfs_item: false,
         notes: None,
-        work_package_id: None,
+        work_package_ids: vec![1],
     };
     let pub4 = OtherDirectCostItem {
         id: Uuid::new_v4(),
         name: "Publications Year 4".to_string(),
         amount_eur: dec!(5000),
-        project_year: 4,
         is_cfs_item: false,
         notes: None,
-        work_package_id: None,
+        work_package_ids: vec![1],
     };
     let pub5 = OtherDirectCostItem {
         id: Uuid::new_v4(),
         name: "Publications Year 5".to_string(),
         amount_eur: dec!(5000),
-        project_year: 5,
         is_cfs_item: false,
         notes: None,
-        work_package_id: None,
+        work_package_ids: vec![1],
     };
 
     Project {
@@ -221,14 +214,11 @@ fn test_it01_budget_summary_returns_ok() {
 }
 
 #[test]
-fn test_it01_year_breakdown_length_equals_duration() {
+fn test_it01_wp_budgets_length_equals_wp_count() {
     let project = make_sample_project();
     let rate_data = make_rate_data();
     let summary = calculate_budget_summary(&project, &rate_data).unwrap();
-    assert_eq!(summary.category_a_by_year.len(), 5);
-    assert_eq!(summary.category_c1_by_year.len(), 5);
-    assert_eq!(summary.category_c3_by_year.len(), 5);
-    assert_eq!(summary.category_e_by_year.len(), 5);
+    assert_eq!(summary.wp_budgets.len(), 3);
 }
 
 #[test]
@@ -254,20 +244,20 @@ fn test_it01_equipment_detail_capped_flag() {
 }
 
 #[test]
-fn test_it01_travel_year1_india_fieldwork() {
-    // India: 4 trips, per instance €2,227 → €8,908 in year 1
+fn test_it01_travel_india_fieldwork() {
+    // India: 4 trips, per instance €2,227 → €8,908
     let project = make_sample_project();
     let rate_data = make_rate_data();
     let summary = calculate_budget_summary(&project, &rate_data).unwrap();
     let india = summary.trip_detail.iter().find(|t| t.name == "India Fieldwork").unwrap();
-    assert_eq!(india.project_year, 1);
+    assert_eq!(india.work_package_ids, vec![1]);
     assert_eq!(india.number_of_instances, 4);
     assert_eq!(india.per_instance_total_eur.round_dp(2), dec!(2227.00));
     assert_eq!(india.total_trip_cost_eur.round_dp(2), dec!(8908.00));
 }
 
 #[test]
-fn test_it01_travel_year2_vienna_conference() {
+fn test_it01_travel_vienna_conference() {
     // Vienna: 3 trips, 2100km → F-03 €429, 5n×€158=€790, 6d×€131=€786, €0 domestic
     // per instance: €429 + €790 + €786 + €0 = €2,005
     // total: €2,005 × 3 = €6,015
@@ -275,19 +265,28 @@ fn test_it01_travel_year2_vienna_conference() {
     let rate_data = make_rate_data();
     let summary = calculate_budget_summary(&project, &rate_data).unwrap();
     let vienna = summary.trip_detail.iter().find(|t| t.name == "Vienna Conference").unwrap();
-    assert_eq!(vienna.project_year, 2);
+    assert_eq!(vienna.work_package_ids, vec![2]);
     assert_eq!(vienna.total_trip_cost_eur.round_dp(2), dec!(6015.00));
 }
 
 #[test]
-fn test_it01_c1_by_year_distribution() {
-    // Year 1: India only (€8,908), Year 2: Vienna only (€6,015), Years 3-5: €0
+fn test_it01_c1_total_is_india_plus_vienna() {
     let project = make_sample_project();
     let rate_data = make_rate_data();
     let summary = calculate_budget_summary(&project, &rate_data).unwrap();
-    assert_eq!(summary.category_c1_by_year[0].amount_eur.round_dp(2), dec!(8908.00));
-    assert_eq!(summary.category_c1_by_year[1].amount_eur.round_dp(2), dec!(6015.00));
-    assert_eq!(summary.category_c1_by_year[2].amount_eur, dec!(0));
+    assert_eq!(summary.category_c1_total.round_dp(2), dec!(8908.00) + dec!(6015.00));
+}
+
+#[test]
+fn test_it01_wp_budgets_travel_lands_in_correct_wp() {
+    // India trip tagged WP1, Vienna trip tagged WP2 — verify per-WP travel split.
+    let project = make_sample_project();
+    let rate_data = make_rate_data();
+    let summary = calculate_budget_summary(&project, &rate_data).unwrap();
+    let wp1 = summary.wp_budgets.iter().find(|w| w.work_package_id == 1).unwrap();
+    let wp2 = summary.wp_budgets.iter().find(|w| w.work_package_id == 2).unwrap();
+    assert_eq!(wp1.travel_eur.round_dp(2), dec!(8908.00));
+    assert_eq!(wp2.travel_eur.round_dp(2), dec!(6015.00));
 }
 
 #[test]
@@ -297,18 +296,6 @@ fn test_it01_c3_total_15000() {
     let rate_data = make_rate_data();
     let summary = calculate_budget_summary(&project, &rate_data).unwrap();
     assert_eq!(summary.category_c3_total, dec!(15000));
-}
-
-#[test]
-fn test_it01_c3_by_year_no_items_in_years_1_2() {
-    let project = make_sample_project();
-    let rate_data = make_rate_data();
-    let summary = calculate_budget_summary(&project, &rate_data).unwrap();
-    assert_eq!(summary.category_c3_by_year[0].amount_eur, dec!(0)); // year 1
-    assert_eq!(summary.category_c3_by_year[1].amount_eur, dec!(0)); // year 2
-    assert_eq!(summary.category_c3_by_year[2].amount_eur, dec!(5000)); // year 3
-    assert_eq!(summary.category_c3_by_year[3].amount_eur, dec!(5000)); // year 4
-    assert_eq!(summary.category_c3_by_year[4].amount_eur, dec!(5000)); // year 5
 }
 
 #[test]
@@ -375,13 +362,12 @@ fn test_it01_role_detail_count() {
 }
 
 #[test]
-fn test_it01_pi_role_not_active_in_year_before_inactive_expert() {
-    // Expert-1 is active only in year 1; verify year 2 cost = 0 for Expert-1
+fn test_it01_expert_inactive_in_year2() {
+    // Expert-1 is active only months 1-12 (year 1); verify year 2 cost = 0.
     let project = make_sample_project();
     let rate_data = make_rate_data();
     let summary = calculate_budget_summary(&project, &rate_data).unwrap();
     let expert = summary.role_detail.iter().find(|r| r.role_label == "Expert-1").unwrap();
-    // Year 2 line must be inactive with zero cost
     let year2 = expert.cost_lines.iter().find(|l| l.year == 2).unwrap();
     assert!(!year2.is_active);
     assert_eq!(year2.annual_cost_eur, dec!(0));
@@ -396,6 +382,18 @@ fn test_it01_postdoc_inactive_year1() {
     let year1 = postdoc.cost_lines.iter().find(|l| l.year == 1).unwrap();
     assert!(!year1.is_active);
     assert_eq!(year1.annual_cost_eur, dec!(0));
+}
+
+#[test]
+fn test_it01_pi_wp_breakdown_lands_entirely_in_wp1() {
+    // WPs all span months 1-60 in this fixture, so the PI's cost (also months 1-60)
+    // should be split evenly across all 3 overlapping WPs rather than concentrated.
+    let project = make_sample_project();
+    let rate_data = make_rate_data();
+    let summary = calculate_budget_summary(&project, &rate_data).unwrap();
+    let pi = summary.role_detail.iter().find(|r| r.role_label == "PI").unwrap();
+    let wp_total: rust_decimal::Decimal = pi.wp_breakdown.iter().map(|w| w.amount_eur).sum();
+    assert_eq!(wp_total.round_dp(2), pi.total_cost_eur.round_dp(2));
 }
 
 #[test]
@@ -436,10 +434,9 @@ fn test_it01_adding_cfs_item_sets_required_and_present() {
         id: Uuid::new_v4(),
         name: "Certificate on Financial Statements".to_string(),
         amount_eur: dec!(12000),
-        project_year: 4,
         is_cfs_item: true,
         notes: None,
-        work_package_id: None,
+        work_package_ids: vec![],
     });
     let rate_data = make_rate_data();
     let summary = calculate_budget_summary(&project, &rate_data).unwrap();
@@ -460,8 +457,8 @@ fn test_it02_empty_project_all_zeros() {
         duration_years: 5,
         work_package_count: 1,
         work_package_names: vec![None],
-        work_package_start_years: vec![1],
-        work_package_end_years: vec![5],
+        work_package_start_months: vec![1],
+        work_package_end_months: vec![60],
         default_inflation_rate_pct: dec!(20),
         try_eur_rate: dec!(50.62),
         indirect_cost_rate_pct: dec!(25),
@@ -492,8 +489,8 @@ fn test_it03_one_year_project() {
         duration_years: 1,
         work_package_count: 1,
         work_package_names: vec![None],
-        work_package_start_years: vec![1],
-        work_package_end_years: vec![1],
+        work_package_start_months: vec![1],
+        work_package_end_months: vec![12],
         default_inflation_rate_pct: dec!(0),
         try_eur_rate: dec!(50),
         indirect_cost_rate_pct: dec!(25),
@@ -507,8 +504,8 @@ fn test_it03_one_year_project() {
         current_monthly_salary_try: dec!(50000), // €1,000/month
         fte_fraction: dec!(1.0),
         inflation_rate_pct: dec!(0),
-        active_years: vec![1],
-        work_package_ids: vec![],
+        start_month: 1,
+        end_month: 12,
     };
     let mut project = Project::new(config);
     project.personnel_roles.push(pi);
@@ -516,7 +513,6 @@ fn test_it03_one_year_project() {
     let summary = calculate_budget_summary(&project, &rate_data).unwrap();
     // Year 1 salary with 0% inflation: €1,000 × 1.00 = €1,000/month, × 12 × 1.0 = €12,000
     assert_eq!(summary.category_a_total, dec!(12000));
-    assert_eq!(summary.category_a_by_year.len(), 1);
     // E = 25% × 12,000 = 3,000
     assert_eq!(summary.category_e_total, dec!(3000));
     assert_eq!(summary.total_eligible_costs, dec!(15000));
@@ -534,8 +530,8 @@ fn test_it04_flat_amount_trip() {
         duration_years: 3,
         work_package_count: 1,
         work_package_names: vec![None],
-        work_package_start_years: vec![1],
-        work_package_end_years: vec![3],
+        work_package_start_months: vec![1],
+        work_package_end_months: vec![36],
         default_inflation_rate_pct: dec!(0),
         try_eur_rate: dec!(50),
         indirect_cost_rate_pct: dec!(25),
@@ -546,9 +542,8 @@ fn test_it04_flat_amount_trip() {
         id: Uuid::new_v4(),
         name: "Domestic Conference".to_string(),
         trip_type: TripType::FlatAmount { flat_amount_per_instance_eur: dec!(2000) },
-        project_year: 2,
         number_of_instances: 3,
-        work_package_id: None,
+        work_package_ids: vec![1],
     };
     let mut project = Project::new(config);
     project.trips.push(flat_trip);
@@ -572,8 +567,8 @@ fn test_it05_subcontracting_excluded_from_eligible_and_requested() {
         call_reference: "ERC-2025-CoG".to_string(),
         duration_years: 1,
         work_package_count: 1,
-        work_package_start_years: vec![1],
-        work_package_end_years: vec![1],
+        work_package_start_months: vec![1],
+        work_package_end_months: vec![12],
         work_package_names: vec![None],
         default_inflation_rate_pct: dec!(0),
         try_eur_rate: dec!(50),
@@ -582,15 +577,14 @@ fn test_it05_subcontracting_excluded_from_eligible_and_requested() {
         call_opening_date: None,
     };
     let mut project = Project::new(config);
-    project.subcontracting = Subcontracting { amount_eur: dec!(20000) };
+    project.subcontracting = Subcontracting { amount_eur: dec!(20000), work_package_id: 1 };
     project.other_cost_items.push(OtherDirectCostItem {
         id: Uuid::new_v4(),
         name: "Publications".to_string(),
         amount_eur: dec!(5000),
-        project_year: 1,
         is_cfs_item: false,
         notes: None,
-        work_package_id: None,
+        work_package_ids: vec![1],
     });
 
     let rate_data = make_rate_data();
@@ -605,4 +599,7 @@ fn test_it05_subcontracting_excluded_from_eligible_and_requested() {
     // Eligible = (total_direct - B) + E = (25000 - 20000) + 1250 = 6250. B must not appear.
     assert_eq!(summary.total_eligible_costs, dec!(6250));
     assert_eq!(summary.requested_eu_contribution, dec!(6250));
+    // Subcontracting is tagged to WP1 and should appear in its per-WP budget line.
+    let wp1 = summary.wp_budgets.iter().find(|w| w.work_package_id == 1).unwrap();
+    assert_eq!(wp1.subcontracting_eur, dec!(20000));
 }

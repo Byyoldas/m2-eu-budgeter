@@ -3,14 +3,13 @@
  *
  * Shown when the budget exceeds €430,000 and no CFS item exists.
  * User can:
- * 1. Add a CFS cost item (enters amount + year)
+ * 1. Add a CFS cost item (enters amount)
  * 2. Dismiss the warning (sets cfs_warning_dismissed)
  */
 
 import { useState } from 'react';
 import { useBudgetSummary } from '../hooks/useBudgetSummary';
 import { addCfsItem, dismissCfsWarning } from '../ipc/commands';
-import { useProjectStore } from '../store/projectStore';
 
 interface CFSModalProps {
   open: boolean;
@@ -18,14 +17,10 @@ interface CFSModalProps {
 }
 
 export function CFSModal({ open, onClose }: CFSModalProps) {
-  const projectConfig = useProjectStore((s) => s.projectConfig);
   const { mutate, isLoading } = useBudgetSummary();
 
   const [amount, setAmount] = useState('');
-  const [year, setYear] = useState(1);
   const [amountError, setAmountError] = useState('');
-
-  const duration = projectConfig?.duration_years ?? 5;
 
   const handleAdd = async () => {
     const n = parseFloat(amount);
@@ -34,7 +29,7 @@ export function CFSModal({ open, onClose }: CFSModalProps) {
       return;
     }
     setAmountError('');
-    const result = await mutate(() => addCfsItem(amount, year));
+    const result = await mutate(() => addCfsItem(amount));
     if (result) onClose();
   };
 
@@ -78,20 +73,6 @@ export function CFSModal({ open, onClose }: CFSModalProps) {
                 onChange={(e) => setAmount(e.target.value)}
               />
               {amountError && <span className="form-error">{amountError}</span>}
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="cfs-year" className="form-label required">Project Year</label>
-              <select
-                id="cfs-year"
-                value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
-                className="form-input"
-              >
-                {Array.from({ length: duration }, (_, i) => i + 1).map((y) => (
-                  <option key={y} value={y}>Year {y}</option>
-                ))}
-              </select>
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ pub mod personnel_cost;
 pub mod equipment_depreciation;
 pub mod trip_cost;
 pub mod budget_aggregator;
+pub mod wp_budget;
 pub mod cfs_checker;
 pub mod budget_summary;
 

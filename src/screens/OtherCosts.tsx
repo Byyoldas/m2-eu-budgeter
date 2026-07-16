@@ -1,5 +1,5 @@
 /**
- * Step 7 — Other Direct Costs (C3) + Subcontracting (B).
+ * Step 6 — Other Direct Costs (C3) + Subcontracting (B).
  * Regular C3 items, subcontracting lump sum, and CFS item management.
  */
 
@@ -34,7 +34,6 @@ function fmt(v: string | undefined): string {
 export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
   const summary = useProjectStore((s) => s.summary);
   const projectConfig = useProjectStore((s) => s.projectConfig);
-  const duration = projectConfig?.duration_years ?? 5;
   const wpCount = projectConfig?.work_package_count ?? 1;
   const wpNames = projectConfig?.work_package_names ?? [];
 
@@ -49,12 +48,14 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
   const hasCfsItem = summary?.cfs_status === 'REQUIRED_AND_PRESENT';
 
   const {
-    register, handleSubmit, reset,
+    register, handleSubmit, reset, watch, setValue,
     formState: { errors },
   } = useForm<OtherCostFormData>({
     resolver: zodResolver(otherCostSchema),
-    defaultValues: { project_year: 1 },
+    defaultValues: { work_package_ids: [] },
   });
+
+  const watchedWpIds = watch('work_package_ids');
 
   const {
     register: regSub, handleSubmit: handleSub, formState: { errors: subErrors },
@@ -67,7 +68,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
     fieldErrors.find((e) => e.field === field)?.message ??
     (errors as Record<string, { message?: string }>)[field]?.message;
 
-  const openAdd = () => { reset({ project_year: 1 }); setEditingId(null); setMode('add'); };
+  const openAdd = () => { reset({ work_package_ids: [] }); setEditingId(null); setMode('add'); };
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this cost item?')) return;
     await mutate(() => deleteOtherCost(id));
@@ -81,9 +82,8 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
     const input: OtherCostInput = {
       name: data.name,
       amount_eur: data.amount_eur,
-      project_year: Number(data.project_year),
       notes: data.notes ?? null,
-      work_package_id: data.work_package_id ? Number(data.work_package_id) : null,
+      work_package_ids: data.work_package_ids,
     };
     const command = editingId
       ? () => updateOtherCost(editingId, input)
@@ -93,7 +93,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
   };
 
   const onSubSubmit = async (data: SubcontractingFormData) => {
-    await mutate(() => setSubcontracting(data.amount_eur));
+    await mutate(() => setSubcontracting(data.amount_eur, Number(data.work_package_id)));
   };
 
   if (mode !== 'list') {
@@ -113,38 +113,38 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
                 {...register('name')} />
               {fieldError('name') && <span className="form-error">{fieldError('name')}</span>}
             </div>
-            <div className="form-row">
-              <div className="form-field">
-                <label htmlFor="oc-amount" className="form-label required">Amount (€)</label>
-                <input id="oc-amount" type="number" step="any" min={0}
-                  className={`form-input${fieldError('amount_eur') ? ' form-input--error' : ''}`}
-                  {...register('amount_eur')} />
-                {fieldError('amount_eur') && <span className="form-error">{fieldError('amount_eur')}</span>}
-              </div>
-              <div className="form-field">
-                <label htmlFor="oc-year" className="form-label required">Project Year</label>
-                <select id="oc-year" className="form-input" {...register('project_year', { valueAsNumber: true })}>
-                  {Array.from({ length: duration }, (_, i) => i + 1).map((y) => (
-                    <option key={y} value={y}>Year {y}</option>
-                  ))}
-                </select>
-              </div>
+            <div className="form-field">
+              <label htmlFor="oc-amount" className="form-label required">Amount (€)</label>
+              <input id="oc-amount" type="number" step="any" min={0}
+                className={`form-input${fieldError('amount_eur') ? ' form-input--error' : ''}`}
+                {...register('amount_eur')} />
+              {fieldError('amount_eur') && <span className="form-error">{fieldError('amount_eur')}</span>}
             </div>
             <div className="form-field">
               <label htmlFor="oc-notes" className="form-label">Notes</label>
               <textarea id="oc-notes" rows={2} className="form-input" {...register('notes')} />
             </div>
-            {wpCount > 0 && (
-              <div className="form-field">
-                <label htmlFor="oc-wp" className="form-label">Work Package</label>
-                <select id="oc-wp" className="form-input" {...register('work_package_id')}>
-                  <option value="">— None —</option>
-                  {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
-                    <option key={wpId} value={wpId}>{(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}</option>
-                  ))}
-                </select>
+            <div className="form-field">
+              <label className="form-label required">Work Package(s)</label>
+              <div className="checkbox-grid">
+                {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
+                  <label key={wpId} className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      value={wpId}
+                      onChange={(e) => {
+                        const current = watchedWpIds ?? [];
+                        setValue('work_package_ids', e.target.checked ? [...current, wpId] : current.filter((w) => w !== wpId));
+                      }}
+                      checked={(watchedWpIds ?? []).includes(wpId)}
+                    />
+                    {(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}
+                  </label>
+                ))}
               </div>
-            )}
+              {fieldError('work_package_ids') && <span className="form-error">{fieldError('work_package_ids')}</span>}
+              <span className="form-hint">Cost is split evenly across all selected Work Packages.</span>
+            </div>
           </div>
           <div className="screen-footer">
             <button type="button" className="btn btn--ghost" onClick={() => setMode('list')}>Cancel</button>
@@ -188,6 +188,18 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
               {...regSub('amount_eur')} />
             {subErrors.amount_eur && <span className="form-error">{subErrors.amount_eur.message}</span>}
           </div>
+          <div className="form-field">
+            <label htmlFor="sub-wp" className="form-label">Work Package</label>
+            <select id="sub-wp"
+              className={`form-input${subErrors.work_package_id ? ' form-input--error' : ''}`}
+              {...regSub('work_package_id')}>
+              <option value="">— Select Work Package —</option>
+              {Array.from({ length: wpCount }, (_, i) => i + 1).map((wpId) => (
+                <option key={wpId} value={wpId}>{(wpNames[wpId - 1] as string | null) ?? `WP${wpId}`}</option>
+              ))}
+            </select>
+            {subErrors.work_package_id && <span className="form-error">{subErrors.work_package_id.message}</span>}
+          </div>
           <button type="submit" className="btn btn--ghost" disabled={isLoading}>Update</button>
         </form>
         <div className="totals-row">
@@ -224,7 +236,9 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
             <div key={item.id} className="item-card">
               <div className="item-card-header">
                 <div className="item-card-info">
-                  <span className="item-card-tag">Year {item.project_year}</span>
+                  <span className="item-card-tag">
+                    {item.work_package_ids.map((id) => (wpNames[id - 1] as string | null) ?? `WP${id}`).join(', ') || '—'}
+                  </span>
                   <h4 className="item-card-title">{item.name}</h4>
                   <span className="item-card-sub">{fmt(item.amount_eur)}</span>
                   {item.notes && <span className="item-card-hint">{item.notes}</span>}
@@ -240,7 +254,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
 
       <div className="screen-footer">
         <button className="btn btn--ghost" onClick={onBack}>← Back</button>
-        <button className="btn btn--primary btn--lg" onClick={onNext}>Next: Review & Export →</button>
+        <button className="btn btn--primary btn--lg" onClick={onNext}>Next: Work Packages →</button>
       </div>
 
       <CFSModal open={showCfsModal} onClose={() => setShowCfsModal(false)} />

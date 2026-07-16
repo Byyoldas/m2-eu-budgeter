@@ -20,7 +20,7 @@ pub fn add_equipment_item(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
-    validate_equipment_item(&input, project.config.duration_years)?;
+    validate_equipment_item(&input, project.config.duration_years, project.config.work_package_count)?;
 
     let item = EquipmentItem {
         id: Uuid::new_v4(),
@@ -29,8 +29,7 @@ pub fn add_equipment_item(
         useful_lifetime_months: input.useful_lifetime_months,
         grant_usage_pct: input.grant_usage_pct,
         grant_usage_months: input.grant_usage_months,
-        year_of_purchase: input.year_of_purchase,
-        work_package_ids: input.work_package_ids,
+        work_package_id: input.work_package_id,
     };
     project.equipment_items.push(item);
 
@@ -52,7 +51,7 @@ pub fn update_equipment_item(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
-    validate_equipment_item(&input, project.config.duration_years)?;
+    validate_equipment_item(&input, project.config.duration_years, project.config.work_package_count)?;
 
     let item = project
         .equipment_items
@@ -65,8 +64,7 @@ pub fn update_equipment_item(
     item.useful_lifetime_months = input.useful_lifetime_months;
     item.grant_usage_pct = input.grant_usage_pct;
     item.grant_usage_months = input.grant_usage_months;
-    item.year_of_purchase = input.year_of_purchase;
-    item.work_package_ids = input.work_package_ids;
+    item.work_package_id = input.work_package_id;
 
     let summary = calculate_budget_summary(project, &state.rate_data)?;
 

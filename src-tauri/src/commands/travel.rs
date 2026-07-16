@@ -23,15 +23,14 @@ pub fn add_trip(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
-    validate_trip(&input, project.config.duration_years)?;
+    validate_trip(&input, project.config.work_package_count)?;
 
     let trip = Trip {
         id: Uuid::new_v4(),
         name: input.name,
         trip_type: input.trip_type,
-        project_year: input.project_year,
         number_of_instances: input.number_of_instances,
-        work_package_id: input.work_package_id,
+        work_package_ids: input.work_package_ids,
     };
     project.trips.push(trip);
 
@@ -53,7 +52,7 @@ pub fn update_trip(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
-    validate_trip(&input, project.config.duration_years)?;
+    validate_trip(&input, project.config.work_package_count)?;
 
     let trip = project
         .trips
@@ -63,9 +62,8 @@ pub fn update_trip(
 
     trip.name = input.name;
     trip.trip_type = input.trip_type;
-    trip.project_year = input.project_year;
     trip.number_of_instances = input.number_of_instances;
-    trip.work_package_id = input.work_package_id;
+    trip.work_package_ids = input.work_package_ids;
 
     let summary = calculate_budget_summary(project, &state.rate_data)?;
 

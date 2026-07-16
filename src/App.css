@@ -47,8 +47,7 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .app-main {
@@ -59,17 +58,32 @@
 }
 
 /* ─── Stepper ──────────────────────────────────────────────────────────────── */
-.stepper { padding: 16px 0 8px; }
+.stepper {
+  padding: 16px 0 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
 .stepper-logo {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 16px 16px;
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 .stepper-logo-icon { font-size: 20px; }
 .stepper-logo-text { font-size: 15px; font-weight: 700; color: var(--text-primary); }
-.stepper-list { list-style: none; margin: 0; padding: 8px 0; }
+.stepper-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 .stepper-item { padding: 1px 8px; }
 .stepper-btn {
   width: 100%;
@@ -101,10 +115,17 @@
 .stepper-btn--active .stepper-num { background: var(--accent); color: #fff; }
 .stepper-btn--done .stepper-num { background: var(--success); color: #fff; }
 .stepper-label { font-size: 13px; }
-.stepper-version { padding: 12px 16px; font-size: 10px; color: var(--text-muted); }
+.stepper-version { padding: 12px 16px; font-size: 10px; color: var(--text-muted); flex: 0 0 auto; }
 
 /* ─── Sidebar Dashboard ────────────────────────────────────────────────────── */
-.sidebar-dashboard { flex: 1; padding: 0 0 16px; overflow: hidden; }
+.sidebar-dashboard {
+  flex: 0 1 auto;
+  padding: 0 0 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 45vh;
+  border-top: 1px solid var(--border);
+}
 
 /* ─── Totals Panel ─────────────────────────────────────────────────────────── */
 .totals-panel { padding: 12px 14px; }

@@ -9,32 +9,33 @@
  * richer control over the output format.
  */
 
-import type { BudgetSummaryDto, ProjectConfigInput } from '../types';
+import type { BudgetSummaryDto, ProjectConfigInput, WpBudgetDto } from '../types';
 
 function n(v: string | undefined): string {
   const val = parseFloat(v ?? '0') || 0;
   return `€ ${val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function buildHtml(summary: BudgetSummaryDto, config: ProjectConfigInput | null): string {
-  const years = summary.category_a_by_year.map((y) => y.year);
+function wpLabel(wp: WpBudgetDto): string {
+  return wp.work_package_name || `WP${wp.work_package_id}`;
+}
 
-  const cats = [
-    { label: 'A  Personnel',      total: summary.category_a_total, byYear: summary.category_a_by_year },
-    { label: 'B  Subcontracting', total: summary.category_b_total, byYear: [] as typeof summary.category_a_by_year },
-    { label: 'C1 Travel',         total: summary.category_c1_total, byYear: summary.category_c1_by_year },
-    { label: 'C2 Equipment',      total: summary.category_c2_total, byYear: [] as typeof summary.category_a_by_year },
-    { label: 'C3 Other Direct',   total: summary.category_c3_total, byYear: summary.category_c3_by_year },
-    { label: 'E  Indirect (25%)', total: summary.category_e_total, byYear: summary.category_e_by_year },
+function buildHtml(summary: BudgetSummaryDto, config: ProjectConfigInput | null): string {
+  const wpBudgets = summary.wp_budgets;
+
+  const cats: { label: string; total: string; key: keyof WpBudgetDto | null }[] = [
+    { label: 'A  Personnel',      total: summary.category_a_total, key: 'personnel_eur' },
+    { label: 'B  Subcontracting', total: summary.category_b_total, key: 'subcontracting_eur' },
+    { label: 'C1 Travel',         total: summary.category_c1_total, key: 'travel_eur' },
+    { label: 'C2 Equipment',      total: summary.category_c2_total, key: 'equipment_eur' },
+    { label: 'C3 Other Direct',   total: summary.category_c3_total, key: 'other_costs_eur' },
+    { label: 'E  Indirect (25%)', total: summary.category_e_total, key: null },
   ];
 
-  const catRows = cats.map(({ label, total, byYear }) => `
+  const catRows = cats.map(({ label, total, key }) => `
     <tr>
       <td>${label}</td>
-      ${years.map((yr) => {
-        const entry = byYear.find((y) => y.year === yr);
-        return `<td class="num">${entry ? n(entry.amount_eur) : ''}</td>`;
-      }).join('')}
+      ${wpBudgets.map((wp) => `<td class="num">${key ? n(wp[key] as string) : ''}</td>`).join('')}
       <td class="num bold">${n(total)}</td>
     </tr>
   `).join('');
@@ -74,7 +75,7 @@ function buildHtml(summary: BudgetSummaryDto, config: ProjectConfigInput | null)
       <thead>
         <tr>
           <th>Category</th>
-          ${years.map((y) => `<th>Year ${y}</th>`).join('')}
+          ${wpBudgets.map((wp) => `<th>${wpLabel(wp)}</th>`).join('')}
           <th>Total</th>
         </tr>
       </thead>
@@ -84,17 +85,17 @@ function buildHtml(summary: BudgetSummaryDto, config: ProjectConfigInput | null)
       <tfoot>
         <tr class="total">
           <td>Total Direct Costs</td>
-          ${years.map(() => '<td></td>').join('')}
+          ${wpBudgets.map(() => '<td></td>').join('')}
           <td class="num">${n(summary.total_direct_costs)}</td>
         </tr>
         <tr class="total">
           <td>Total Eligible Costs</td>
-          ${years.map(() => '<td></td>').join('')}
+          ${wpBudgets.map(() => '<td></td>').join('')}
           <td class="num">${n(summary.total_eligible_costs)}</td>
         </tr>
         <tr class="grand">
           <td>EU Contribution Requested</td>
-          ${years.map(() => '<td></td>').join('')}
+          ${wpBudgets.map(() => '<td></td>').join('')}
           <td class="num">${n(summary.requested_eu_contribution)}</td>
         </tr>
       </tfoot>
@@ -123,12 +124,12 @@ function buildHtml(summary: BudgetSummaryDto, config: ProjectConfigInput | null)
   <div class="section">
     <h2>Travel Detail</h2>
     <table>
-      <thead><tr><th>Trip</th><th>Year</th><th>×</th><th>Total</th></tr></thead>
+      <thead><tr><th>Trip</th><th>Work Package(s)</th><th>×</th><th>Total</th></tr></thead>
       <tbody>
         ${summary.trip_detail.map((t) => `
           <tr>
             <td>${t.name}</td>
-            <td>Year ${t.project_year}</td>
+            <td>${t.work_package_ids.map((id) => wpBudgets.find((w) => w.work_package_id === id)?.work_package_name || `WP${id}`).join(', ')}</td>
             <td class="num">${t.number_of_instances}</td>
             <td class="num">${n(t.total_trip_cost_eur)}</td>
           </tr>

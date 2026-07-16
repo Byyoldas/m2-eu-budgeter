@@ -77,18 +77,9 @@ impl TripCostResult {
     }
 }
 
-/// One year's aggregated travel cost (CALC-12 intermediate).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct YearTravelCost {
-    pub year: u8,
-    #[serde(with = "rust_decimal::serde::str")]
-    pub amount_eur: Decimal,
-}
-
-/// Category C1 total and per-year breakdown (CALC-12 output).
+/// Category C1 total (CALC-12 output).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TravelCategoryTotals {
-    pub by_year: Vec<YearTravelCost>,
     #[serde(with = "rust_decimal::serde::str")]
     pub total: Decimal,
 }
@@ -275,36 +266,13 @@ pub fn calculate_flat_trip_cost(
 
 // ─── CALC-12 ─────────────────────────────────────────────────────────────────
 
-/// CALC-12: Aggregate all trip costs by assigned project year.
+/// CALC-12: Sum all trip costs into the Category C1 total.
 ///
 /// # Arguments
-/// * `trip_costs` — Vec of (project_year, total_cost) pairs.
-/// * `duration_years` — Total project duration (initialises zero entries).
-pub fn aggregate_travel_by_year(
-    trip_costs: &[(u8, Decimal)], // (year, total_cost)
-    duration_years: u8,
-) -> Result<TravelCategoryTotals, AppError> {
-    let mut year_totals: Vec<Decimal> = vec![Decimal::ZERO; duration_years as usize];
-
-    for &(year, cost) in trip_costs {
-        if year < 1 || year > duration_years {
-            return Err(calc_error(
-                "YEAR_OUT_OF_RANGE",
-                format!("Trip is assigned to year {year}, which is outside the project duration of {duration_years} years."),
-            ));
-        }
-        year_totals[(year - 1) as usize] += cost;
-    }
-
-    let total: Decimal = year_totals.iter().sum();
-
-    let by_year: Vec<YearTravelCost> = year_totals
-        .into_iter()
-        .enumerate()
-        .map(|(i, amt)| YearTravelCost { year: (i + 1) as u8, amount_eur: amt })
-        .collect();
-
-    Ok(TravelCategoryTotals { by_year, total })
+/// * `trip_costs` — Total cost of each registered trip.
+pub fn aggregate_travel_costs(trip_costs: &[Decimal]) -> Result<TravelCategoryTotals, AppError> {
+    let total: Decimal = trip_costs.iter().sum();
+    Ok(TravelCategoryTotals { total })
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -559,35 +527,15 @@ mod tests {
     // ── CALC-12 tests ──
 
     #[test]
-    fn test_calc_12_trips_spread_across_years() {
-        let trip_costs = vec![(1, dec!(8908)), (2, dec!(6753)), (3, dec!(6000))];
-        let totals = aggregate_travel_by_year(&trip_costs, 5).unwrap();
-        assert_eq!(totals.by_year[0].amount_eur, dec!(8908));
-        assert_eq!(totals.by_year[1].amount_eur, dec!(6753));
-        assert_eq!(totals.by_year[2].amount_eur, dec!(6000));
-        assert_eq!(totals.by_year[3].amount_eur, Decimal::ZERO);
-        assert_eq!(totals.by_year[4].amount_eur, Decimal::ZERO);
+    fn test_calc_12_sums_all_trips() {
+        let trip_costs = vec![dec!(8908), dec!(6753), dec!(6000)];
+        let totals = aggregate_travel_costs(&trip_costs).unwrap();
         assert_eq!(totals.total, dec!(21661));
     }
 
     #[test]
-    fn test_calc_12_multiple_trips_same_year() {
-        let trip_costs = vec![(1, dec!(3000)), (1, dec!(2000))];
-        let totals = aggregate_travel_by_year(&trip_costs, 2).unwrap();
-        assert_eq!(totals.by_year[0].amount_eur, dec!(5000));
-    }
-
-    #[test]
-    fn test_calc_12_no_trips_all_zeros() {
-        let totals = aggregate_travel_by_year(&[], 5).unwrap();
+    fn test_calc_12_no_trips_zero_total() {
+        let totals = aggregate_travel_costs(&[]).unwrap();
         assert_eq!(totals.total, Decimal::ZERO);
-        assert_eq!(totals.by_year.len(), 5);
-    }
-
-    #[test]
-    fn test_calc_12_year_out_of_range_returns_error() {
-        let trip_costs = vec![(6, dec!(1000))]; // project is 5 years
-        let result = aggregate_travel_by_year(&trip_costs, 5);
-        assert!(matches!(result, Err(AppError::Calculation { code, .. }) if code == "YEAR_OUT_OF_RANGE"));
     }
 }

@@ -3,7 +3,11 @@
  * Exports the budget summary as a flat CSV file for pasting into other tools.
  */
 
-import type { BudgetSummaryDto, ProjectConfigInput } from '../types';
+import type { BudgetSummaryDto, ProjectConfigInput, WpBudgetDto } from '../types';
+
+function wpLabel(wp: WpBudgetDto): string {
+  return wp.work_package_name || `WP${wp.work_package_id}`;
+}
 
 function n(v: string | undefined): string {
   const val = parseFloat(v ?? '0') || 0;
@@ -28,7 +32,7 @@ export async function exportToCsv(
   summary: BudgetSummaryDto,
   config: ProjectConfigInput | null,
 ): Promise<void> {
-  const years = summary.category_a_by_year.map((y) => y.year);
+  const wpBudgets = summary.wp_budgets;
   const lines: string[] = [];
 
   // Project header
@@ -39,24 +43,21 @@ export async function exportToCsv(
   lines.push('');
 
   // Category summary header
-  lines.push(row('Category', ...years.map((y) => `Year ${y}`), 'Total (EUR)'));
+  lines.push(row('Category', ...wpBudgets.map(wpLabel), 'Total (EUR)'));
 
-  const cats = [
-    { label: 'A  Personnel',      total: summary.category_a_total, byYear: summary.category_a_by_year },
-    { label: 'B  Subcontracting', total: summary.category_b_total, byYear: [] as typeof summary.category_a_by_year },
-    { label: 'C1 Travel',         total: summary.category_c1_total, byYear: summary.category_c1_by_year },
-    { label: 'C2 Equipment',      total: summary.category_c2_total, byYear: [] as typeof summary.category_a_by_year },
-    { label: 'C3 Other Direct',   total: summary.category_c3_total, byYear: summary.category_c3_by_year },
-    { label: 'E  Indirect',       total: summary.category_e_total, byYear: summary.category_e_by_year },
+  const cats: { label: string; total: string; key: keyof WpBudgetDto | null }[] = [
+    { label: 'A  Personnel',      total: summary.category_a_total, key: 'personnel_eur' },
+    { label: 'B  Subcontracting', total: summary.category_b_total, key: 'subcontracting_eur' },
+    { label: 'C1 Travel',         total: summary.category_c1_total, key: 'travel_eur' },
+    { label: 'C2 Equipment',      total: summary.category_c2_total, key: 'equipment_eur' },
+    { label: 'C3 Other Direct',   total: summary.category_c3_total, key: 'other_costs_eur' },
+    { label: 'E  Indirect',       total: summary.category_e_total, key: null },
   ];
 
-  for (const { label, total, byYear } of cats) {
+  for (const { label, total, key } of cats) {
     lines.push(row(
       label,
-      ...years.map((yr) => {
-        const entry = byYear.find((y) => y.year === yr);
-        return entry ? n(entry.amount_eur) : '';
-      }),
+      ...wpBudgets.map((wp) => (key ? n(wp[key] as string) : '')),
       n(total),
     ));
   }
@@ -70,16 +71,14 @@ export async function exportToCsv(
   if (summary.role_detail.length > 0) {
     lines.push('');
     lines.push(row('PERSONNEL DETAIL'));
-    lines.push(row('Role', 'Type', 'FTE', ...years.map((y) => `Year ${y}`), 'Total'));
+    lines.push(row('Role', 'Type', 'FTE', 'Start Month', 'End Month', 'Total'));
     for (const role of summary.role_detail) {
       lines.push(row(
         role.role_label,
         role.role_type,
         parseFloat(role.fte_fraction).toFixed(2),
-        ...years.map((yr) => {
-          const line = role.cost_lines.find((l) => l.year === yr);
-          return line?.is_active ? n(line.annual_cost_eur) : '0.00';
-        }),
+        role.start_month,
+        role.end_month,
         n(role.total_cost_eur),
       ));
     }
@@ -99,11 +98,11 @@ export async function exportToCsv(
   if (summary.trip_detail.length > 0) {
     lines.push('');
     lines.push(row('TRAVEL DETAIL'));
-    lines.push(row('Trip', 'Year', 'Instances', 'Per Instance', 'Total'));
+    lines.push(row('Trip', 'Work Package(s)', 'Instances', 'Per Instance', 'Total'));
     for (const trip of summary.trip_detail) {
       lines.push(row(
         trip.name,
-        `Year ${trip.project_year}`,
+        trip.work_package_ids.map((id) => wpBudgets.find((w) => w.work_package_id === id)?.work_package_name || `WP${id}`).join(', '),
         trip.number_of_instances,
         n(trip.per_instance_total_eur),
         n(trip.total_trip_cost_eur),
