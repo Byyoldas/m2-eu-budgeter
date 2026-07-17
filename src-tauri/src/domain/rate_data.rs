@@ -192,3 +192,62 @@ pub struct CountrySummary {
     #[serde(with = "rust_decimal::serde::str")]
     pub subsistence_eur_per_day: Decimal,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Smoke test guarding the embedded EU rate JSON files against parse
+    /// errors and gross data corruption — the tables themselves are
+    /// transcribed from the official "EU Grants: Additional Information on
+    /// Unit Costs and Contributions" Annex 2a/2b, so this doesn't re-verify
+    /// every value, just structural sanity (loads, has an OTHER fallback,
+    /// every version's flight bands cover 400km+ with no gaps).
+    #[test]
+    fn test_load_embedded_all_versions_parse_and_are_well_formed() {
+        let rate_data = RateData::load_embedded().expect("embedded rate JSON must parse");
+        assert_eq!(rate_data.versions.len(), 3);
+
+        for version in &rate_data.versions {
+            assert!(
+                version.country_rates.iter().any(|c| c.country_code == "OTHER"),
+                "version {} is missing the OTHER fallback country",
+                version.version_id
+            );
+            assert!(!version.flight_bands.is_empty());
+
+            let mut bands = version.flight_bands.clone();
+            bands.sort_by_key(|b| b.min_km);
+            assert_eq!(bands[0].min_km, 400, "version {} flight bands must start at 400km", version.version_id);
+            for w in bands.windows(2) {
+                assert_eq!(
+                    w[0].max_km + 1,
+                    w[1].min_km,
+                    "version {} has a gap/overlap between flight bands {} and {}",
+                    version.version_id, w[0].band_id, w[1].band_id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_current_version_matches_official_source_values() {
+        // Spot-checks a handful of values from the "as from 13 May 2025"
+        // table against the source PDF, to catch a bad transcription/edit.
+        let rate_data = RateData::load_embedded().unwrap();
+        let current = rate_data.find_version("from_2025_05_13").unwrap();
+
+        let at = current.find_country_rates("AT").unwrap();
+        assert_eq!(at.accommodation_eur, 158);
+        assert_eq!(at.subsistence_eur, 131);
+
+        let other = current.find_country_rates("ZZ").unwrap(); // falls back to OTHER
+        assert_eq!(other.country_code, "OTHER");
+        assert_eq!(other.accommodation_eur, 145);
+        assert_eq!(other.subsistence_eur, 60);
+
+        // Flight band for 1900km one-way should be the 1601-2500 band (429).
+        let band = current.find_flight_band(1900).unwrap();
+        assert_eq!(band.cost_eur, 429);
+    }
+}

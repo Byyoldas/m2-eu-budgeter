@@ -69,6 +69,16 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
     (errors as Record<string, { message?: string }>)[field]?.message;
 
   const openAdd = () => { reset({ work_package_ids: [] }); setEditingId(null); setMode('add'); };
+  const openEdit = (item: OtherCostItemDetailDto) => {
+    reset({
+      name: item.name,
+      amount_eur: item.amount_eur,
+      notes: item.notes ?? '',
+      work_package_ids: item.work_package_ids,
+    });
+    setEditingId(item.id);
+    setMode('edit');
+  };
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this cost item?')) return;
     await mutate(() => deleteOtherCost(id));
@@ -244,6 +254,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
                   {item.notes && <span className="item-card-hint">{item.notes}</span>}
                 </div>
                 <div className="item-card-actions">
+                  <button className="btn btn--sm btn--ghost" onClick={() => openEdit(item)}>Edit</button>
                   <button className="btn btn--sm btn--danger" onClick={() => handleDelete(item.id)}>Delete</button>
                 </div>
               </div>

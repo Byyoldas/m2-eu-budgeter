@@ -1,87 +1,430 @@
 {
   "version_id": "before_2024_07_31",
-  "valid_from": "2000-01-01",
+  "valid_from": "2021-01-12",
   "valid_until": "2024-07-30",
-  "description": "EU Travel Rates prior to 31 July 2024",
+  "description": "EU Travel Rates effective before 31 July 2024",
   "flight_bands": [
-    { "code": "F-01", "label": "Up to 600 km", "min_km": 0, "max_km": 600, "rate_eur": 278 },
-    { "code": "F-02", "label": "601 – 2000 km", "min_km": 601, "max_km": 2000, "rate_eur": 312 },
-    { "code": "F-03", "label": "2001 – 3000 km", "min_km": 2001, "max_km": 3000, "rate_eur": 481 },
-    { "code": "F-04", "label": "3001 – 4000 km", "min_km": 3001, "max_km": 4000, "rate_eur": 612 },
-    { "code": "F-05", "label": "4001 – 10000 km", "min_km": 4001, "max_km": 10000, "rate_eur": 744 },
-    { "code": "F-06", "label": "Over 10000 km", "min_km": 10001, "max_km": 999999, "rate_eur": 1026 }
+    {
+      "code": "F-01",
+      "label": "400-600 km",
+      "min_km": 400,
+      "max_km": 600,
+      "rate_eur": 245
+    },
+    {
+      "code": "F-02",
+      "label": "601-800 km",
+      "min_km": 601,
+      "max_km": 800,
+      "rate_eur": 261
+    },
+    {
+      "code": "F-03",
+      "label": "801-1200 km",
+      "min_km": 801,
+      "max_km": 1200,
+      "rate_eur": 276
+    },
+    {
+      "code": "F-04",
+      "label": "1201-1600 km",
+      "min_km": 1201,
+      "max_km": 1600,
+      "rate_eur": 288
+    },
+    {
+      "code": "F-05",
+      "label": "1601-2000 km",
+      "min_km": 1601,
+      "max_km": 2000,
+      "rate_eur": 369
+    },
+    {
+      "code": "F-06",
+      "label": "2001-2500 km",
+      "min_km": 2001,
+      "max_km": 2500,
+      "rate_eur": 429
+    },
+    {
+      "code": "F-07",
+      "label": "2501-3500 km",
+      "min_km": 2501,
+      "max_km": 3500,
+      "rate_eur": 541
+    },
+    {
+      "code": "F-08",
+      "label": "3501-4500 km",
+      "min_km": 3501,
+      "max_km": 4500,
+      "rate_eur": 659
+    },
+    {
+      "code": "F-09",
+      "label": "4501-6000 km",
+      "min_km": 4501,
+      "max_km": 6000,
+      "rate_eur": 796
+    },
+    {
+      "code": "F-10",
+      "label": "6001-7500 km",
+      "min_km": 6001,
+      "max_km": 7500,
+      "rate_eur": 900
+    },
+    {
+      "code": "F-11",
+      "label": "7501-10000 km",
+      "min_km": 7501,
+      "max_km": 10000,
+      "rate_eur": 1201
+    },
+    {
+      "code": "F-12",
+      "label": "10001+ km",
+      "min_km": 10001,
+      "max_km": 999999,
+      "rate_eur": 1376
+    }
   ],
   "countries": [
-    { "country_code": "AL", "country_name": "Albania", "accommodation_eur": 120, "subsistence_eur": 45 },
-    { "country_code": "AD", "country_name": "Andorra", "accommodation_eur": 145, "subsistence_eur": 50 },
-    { "country_code": "AT", "country_name": "Austria", "accommodation_eur": 140, "subsistence_eur": 48 },
-    { "country_code": "BY", "country_name": "Belarus", "accommodation_eur": 115, "subsistence_eur": 40 },
-    { "country_code": "BE", "country_name": "Belgium", "accommodation_eur": 145, "subsistence_eur": 50 },
-    { "country_code": "BA", "country_name": "Bosnia and Herzegovina", "accommodation_eur": 110, "subsistence_eur": 40 },
-    { "country_code": "BG", "country_name": "Bulgaria", "accommodation_eur": 95, "subsistence_eur": 35 },
-    { "country_code": "HR", "country_name": "Croatia", "accommodation_eur": 115, "subsistence_eur": 40 },
-    { "country_code": "CY", "country_name": "Cyprus", "accommodation_eur": 125, "subsistence_eur": 45 },
-    { "country_code": "CZ", "country_name": "Czech Republic", "accommodation_eur": 115, "subsistence_eur": 40 },
-    { "country_code": "DK", "country_name": "Denmark", "accommodation_eur": 160, "subsistence_eur": 55 },
-    { "country_code": "EE", "country_name": "Estonia", "accommodation_eur": 105, "subsistence_eur": 37 },
-    { "country_code": "FI", "country_name": "Finland", "accommodation_eur": 140, "subsistence_eur": 48 },
-    { "country_code": "FR", "country_name": "France", "accommodation_eur": 155, "subsistence_eur": 53 },
-    { "country_code": "GE", "country_name": "Georgia", "accommodation_eur": 105, "subsistence_eur": 37 },
-    { "country_code": "DE", "country_name": "Germany", "accommodation_eur": 150, "subsistence_eur": 51 },
-    { "country_code": "GR", "country_name": "Greece", "accommodation_eur": 125, "subsistence_eur": 45 },
-    { "country_code": "HU", "country_name": "Hungary", "accommodation_eur": 110, "subsistence_eur": 40 },
-    { "country_code": "IS", "country_name": "Iceland", "accommodation_eur": 170, "subsistence_eur": 60 },
-    { "country_code": "IE", "country_name": "Ireland", "accommodation_eur": 160, "subsistence_eur": 55 },
-    { "country_code": "IL", "country_name": "Israel", "accommodation_eur": 160, "subsistence_eur": 55 },
-    { "country_code": "IT", "country_name": "Italy", "accommodation_eur": 150, "subsistence_eur": 51 },
-    { "country_code": "KZ", "country_name": "Kazakhstan", "accommodation_eur": 105, "subsistence_eur": 37 },
-    { "country_code": "XK", "country_name": "Kosovo", "accommodation_eur": 95, "subsistence_eur": 35 },
-    { "country_code": "LV", "country_name": "Latvia", "accommodation_eur": 105, "subsistence_eur": 37 },
-    { "country_code": "LI", "country_name": "Liechtenstein", "accommodation_eur": 160, "subsistence_eur": 55 },
-    { "country_code": "LT", "country_name": "Lithuania", "accommodation_eur": 105, "subsistence_eur": 37 },
-    { "country_code": "LU", "country_name": "Luxembourg", "accommodation_eur": 150, "subsistence_eur": 51 },
-    { "country_code": "MT", "country_name": "Malta", "accommodation_eur": 125, "subsistence_eur": 45 },
-    { "country_code": "MD", "country_name": "Moldova", "accommodation_eur": 95, "subsistence_eur": 35 },
-    { "country_code": "MC", "country_name": "Monaco", "accommodation_eur": 185, "subsistence_eur": 65 },
-    { "country_code": "ME", "country_name": "Montenegro", "accommodation_eur": 105, "subsistence_eur": 37 },
-    { "country_code": "MA", "country_name": "Morocco", "accommodation_eur": 105, "subsistence_eur": 37 },
-    { "country_code": "NL", "country_name": "Netherlands", "accommodation_eur": 160, "subsistence_eur": 55 },
-    { "country_code": "MK", "country_name": "North Macedonia", "accommodation_eur": 95, "subsistence_eur": 35 },
-    { "country_code": "NO", "country_name": "Norway", "accommodation_eur": 170, "subsistence_eur": 60 },
-    { "country_code": "PL", "country_name": "Poland", "accommodation_eur": 110, "subsistence_eur": 40 },
-    { "country_code": "PT", "country_name": "Portugal", "accommodation_eur": 130, "subsistence_eur": 45 },
-    { "country_code": "RO", "country_name": "Romania", "accommodation_eur": 100, "subsistence_eur": 37 },
-    { "country_code": "RU", "country_name": "Russia", "accommodation_eur": 115, "subsistence_eur": 40 },
-    { "country_code": "SM", "country_name": "San Marino", "accommodation_eur": 140, "subsistence_eur": 48 },
-    { "country_code": "RS", "country_name": "Serbia", "accommodation_eur": 100, "subsistence_eur": 37 },
-    { "country_code": "SK", "country_name": "Slovakia", "accommodation_eur": 110, "subsistence_eur": 40 },
-    { "country_code": "SI", "country_name": "Slovenia", "accommodation_eur": 115, "subsistence_eur": 40 },
-    { "country_code": "ES", "country_name": "Spain", "accommodation_eur": 140, "subsistence_eur": 48 },
-    { "country_code": "SE", "country_name": "Sweden", "accommodation_eur": 155, "subsistence_eur": 53 },
-    { "country_code": "CH", "country_name": "Switzerland", "accommodation_eur": 170, "subsistence_eur": 60 },
-    { "country_code": "TN", "country_name": "Tunisia", "accommodation_eur": 95, "subsistence_eur": 35 },
-    { "country_code": "TR", "country_name": "Turkey", "accommodation_eur": 115, "subsistence_eur": 40 },
-    { "country_code": "UA", "country_name": "Ukraine", "accommodation_eur": 95, "subsistence_eur": 35 },
-    { "country_code": "GB", "country_name": "United Kingdom", "accommodation_eur": 160, "subsistence_eur": 55 },
-    { "country_code": "VA", "country_name": "Vatican City", "accommodation_eur": 140, "subsistence_eur": 48 },
-    { "country_code": "IN", "country_name": "India", "accommodation_eur": 115, "subsistence_eur": 45 },
-    { "country_code": "CN", "country_name": "China", "accommodation_eur": 125, "subsistence_eur": 45 },
-    { "country_code": "JP", "country_name": "Japan", "accommodation_eur": 140, "subsistence_eur": 50 },
-    { "country_code": "KR", "country_name": "South Korea", "accommodation_eur": 130, "subsistence_eur": 47 },
-    { "country_code": "SG", "country_name": "Singapore", "accommodation_eur": 150, "subsistence_eur": 53 },
-    { "country_code": "AU", "country_name": "Australia", "accommodation_eur": 140, "subsistence_eur": 50 },
-    { "country_code": "NZ", "country_name": "New Zealand", "accommodation_eur": 130, "subsistence_eur": 47 },
-    { "country_code": "US", "country_name": "United States", "accommodation_eur": 160, "subsistence_eur": 57 },
-    { "country_code": "CA", "country_name": "Canada", "accommodation_eur": 145, "subsistence_eur": 53 },
-    { "country_code": "BR", "country_name": "Brazil", "accommodation_eur": 115, "subsistence_eur": 42 },
-    { "country_code": "AR", "country_name": "Argentina", "accommodation_eur": 100, "subsistence_eur": 37 },
-    { "country_code": "MX", "country_name": "Mexico", "accommodation_eur": 115, "subsistence_eur": 42 },
-    { "country_code": "ZA", "country_name": "South Africa", "accommodation_eur": 105, "subsistence_eur": 38 },
-    { "country_code": "NG", "country_name": "Nigeria", "accommodation_eur": 115, "subsistence_eur": 42 },
-    { "country_code": "KE", "country_name": "Kenya", "accommodation_eur": 100, "subsistence_eur": 37 },
-    { "country_code": "EG", "country_name": "Egypt", "accommodation_eur": 95, "subsistence_eur": 35 },
-    { "country_code": "SA", "country_name": "Saudi Arabia", "accommodation_eur": 130, "subsistence_eur": 47 },
-    { "country_code": "AE", "country_name": "United Arab Emirates", "accommodation_eur": 150, "subsistence_eur": 53 },
-    { "country_code": "OTHER", "country_name": "Other (not listed)", "accommodation_eur": 105, "subsistence_eur": 37 }
+    {
+      "country_code": "AL",
+      "country_name": "Albania",
+      "accommodation_eur": 101,
+      "subsistence_eur": 50
+    },
+    {
+      "country_code": "DZ",
+      "country_name": "Algeria",
+      "accommodation_eur": 157,
+      "subsistence_eur": 85
+    },
+    {
+      "country_code": "AM",
+      "country_name": "Armenia",
+      "accommodation_eur": 115,
+      "subsistence_eur": 70
+    },
+    {
+      "country_code": "AT",
+      "country_name": "Austria",
+      "accommodation_eur": 126,
+      "subsistence_eur": 102
+    },
+    {
+      "country_code": "AZ",
+      "country_name": "Azerbaijan",
+      "accommodation_eur": 136,
+      "subsistence_eur": 70
+    },
+    {
+      "country_code": "BY",
+      "country_name": "Belarus",
+      "accommodation_eur": 108,
+      "subsistence_eur": 90
+    },
+    {
+      "country_code": "BE",
+      "country_name": "Belgium",
+      "accommodation_eur": 137,
+      "subsistence_eur": 102
+    },
+    {
+      "country_code": "BA",
+      "country_name": "Bosnia and Herzegovina",
+      "accommodation_eur": 90,
+      "subsistence_eur": 65
+    },
+    {
+      "country_code": "BG",
+      "country_name": "Bulgaria",
+      "accommodation_eur": 110,
+      "subsistence_eur": 57
+    },
+    {
+      "country_code": "HR",
+      "country_name": "Croatia",
+      "accommodation_eur": 104,
+      "subsistence_eur": 75
+    },
+    {
+      "country_code": "CY",
+      "country_name": "Cyprus",
+      "accommodation_eur": 120,
+      "subsistence_eur": 88
+    },
+    {
+      "country_code": "CZ",
+      "country_name": "Czechia",
+      "accommodation_eur": 107,
+      "subsistence_eur": 70
+    },
+    {
+      "country_code": "DK",
+      "country_name": "Denmark",
+      "accommodation_eur": 158,
+      "subsistence_eur": 124
+    },
+    {
+      "country_code": "EG",
+      "country_name": "Egypt",
+      "accommodation_eur": 152,
+      "subsistence_eur": 65
+    },
+    {
+      "country_code": "EE",
+      "country_name": "Estonia",
+      "accommodation_eur": 107,
+      "subsistence_eur": 80
+    },
+    {
+      "country_code": "FI",
+      "country_name": "Finland",
+      "accommodation_eur": 146,
+      "subsistence_eur": 113
+    },
+    {
+      "country_code": "FR",
+      "country_name": "France",
+      "accommodation_eur": 166,
+      "subsistence_eur": 102
+    },
+    {
+      "country_code": "DE",
+      "country_name": "Germany",
+      "accommodation_eur": 119,
+      "subsistence_eur": 97
+    },
+    {
+      "country_code": "GE",
+      "country_name": "Georgia",
+      "accommodation_eur": 134,
+      "subsistence_eur": 80
+    },
+    {
+      "country_code": "GR",
+      "country_name": "Greece",
+      "accommodation_eur": 107,
+      "subsistence_eur": 82
+    },
+    {
+      "country_code": "HU",
+      "country_name": "Hungary",
+      "accommodation_eur": 105,
+      "subsistence_eur": 64
+    },
+    {
+      "country_code": "IS",
+      "country_name": "Iceland",
+      "accommodation_eur": 190,
+      "subsistence_eur": 85
+    },
+    {
+      "country_code": "IE",
+      "country_name": "Ireland",
+      "accommodation_eur": 139,
+      "subsistence_eur": 108
+    },
+    {
+      "country_code": "IL",
+      "country_name": "Israel",
+      "accommodation_eur": 187,
+      "subsistence_eur": 105
+    },
+    {
+      "country_code": "IT",
+      "country_name": "Italy",
+      "accommodation_eur": 114,
+      "subsistence_eur": 98
+    },
+    {
+      "country_code": "JO",
+      "country_name": "Jordan",
+      "accommodation_eur": 140,
+      "subsistence_eur": 60
+    },
+    {
+      "country_code": "XK",
+      "country_name": "Kosovo",
+      "accommodation_eur": 92,
+      "subsistence_eur": 60
+    },
+    {
+      "country_code": "LV",
+      "country_name": "Latvia",
+      "accommodation_eur": 95,
+      "subsistence_eur": 73
+    },
+    {
+      "country_code": "LB",
+      "country_name": "Lebanon",
+      "accommodation_eur": 154,
+      "subsistence_eur": 70
+    },
+    {
+      "country_code": "LY",
+      "country_name": "Libya",
+      "accommodation_eur": 146,
+      "subsistence_eur": 50
+    },
+    {
+      "country_code": "LI",
+      "country_name": "Liechtenstein",
+      "accommodation_eur": 135,
+      "subsistence_eur": 80
+    },
+    {
+      "country_code": "LT",
+      "country_name": "Lithuania",
+      "accommodation_eur": 94,
+      "subsistence_eur": 69
+    },
+    {
+      "country_code": "LU",
+      "country_name": "Luxembourg",
+      "accommodation_eur": 163,
+      "subsistence_eur": 98
+    },
+    {
+      "country_code": "MT",
+      "country_name": "Malta",
+      "accommodation_eur": 141,
+      "subsistence_eur": 88
+    },
+    {
+      "country_code": "MD",
+      "country_name": "Moldova",
+      "accommodation_eur": 133,
+      "subsistence_eur": 80
+    },
+    {
+      "country_code": "ME",
+      "country_name": "Montenegro",
+      "accommodation_eur": 98,
+      "subsistence_eur": 60
+    },
+    {
+      "country_code": "MA",
+      "country_name": "Morocco",
+      "accommodation_eur": 129,
+      "subsistence_eur": 75
+    },
+    {
+      "country_code": "NL",
+      "country_name": "Netherlands",
+      "accommodation_eur": 133,
+      "subsistence_eur": 103
+    },
+    {
+      "country_code": "MK",
+      "country_name": "North Macedonia",
+      "accommodation_eur": 95,
+      "subsistence_eur": 50
+    },
+    {
+      "country_code": "NO",
+      "country_name": "Norway",
+      "accommodation_eur": 145,
+      "subsistence_eur": 80
+    },
+    {
+      "country_code": "PS",
+      "country_name": "Palestine",
+      "accommodation_eur": 140,
+      "subsistence_eur": 60
+    },
+    {
+      "country_code": "PL",
+      "country_name": "Poland",
+      "accommodation_eur": 103,
+      "subsistence_eur": 67
+    },
+    {
+      "country_code": "PT",
+      "country_name": "Portugal",
+      "accommodation_eur": 109,
+      "subsistence_eur": 83
+    },
+    {
+      "country_code": "RO",
+      "country_name": "Romania",
+      "accommodation_eur": 109,
+      "subsistence_eur": 62
+    },
+    {
+      "country_code": "RS",
+      "country_name": "Serbia",
+      "accommodation_eur": 105,
+      "subsistence_eur": 60
+    },
+    {
+      "country_code": "SK",
+      "country_name": "Slovakia",
+      "accommodation_eur": 98,
+      "subsistence_eur": 74
+    },
+    {
+      "country_code": "SI",
+      "country_name": "Slovenia",
+      "accommodation_eur": 113,
+      "subsistence_eur": 84
+    },
+    {
+      "country_code": "ES",
+      "country_name": "Spain",
+      "accommodation_eur": 117,
+      "subsistence_eur": 88
+    },
+    {
+      "country_code": "SE",
+      "country_name": "Sweden",
+      "accommodation_eur": 158,
+      "subsistence_eur": 117
+    },
+    {
+      "country_code": "CH",
+      "country_name": "Switzerland",
+      "accommodation_eur": 178,
+      "subsistence_eur": 80
+    },
+    {
+      "country_code": "SY",
+      "country_name": "Syria",
+      "accommodation_eur": 145,
+      "subsistence_eur": 80
+    },
+    {
+      "country_code": "TN",
+      "country_name": "Tunisia",
+      "accommodation_eur": 99,
+      "subsistence_eur": 60
+    },
+    {
+      "country_code": "TR",
+      "country_name": "Turkey",
+      "accommodation_eur": 116,
+      "subsistence_eur": 55
+    },
+    {
+      "country_code": "UA",
+      "country_name": "Ukraine",
+      "accommodation_eur": 122,
+      "subsistence_eur": 80
+    },
+    {
+      "country_code": "GB",
+      "country_name": "United Kingdom",
+      "accommodation_eur": 151,
+      "subsistence_eur": 125
+    },
+    {
+      "country_code": "OTHER",
+      "country_name": "Other (not listed)",
+      "accommodation_eur": 145,
+      "subsistence_eur": 60
+    }
   ]
 }
