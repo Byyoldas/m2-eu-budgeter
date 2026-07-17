@@ -14,6 +14,7 @@ import { ProgressStepper } from './components/ProgressStepper';
 import { CategoryTotalsPanel } from './components/CategoryTotalsPanel';
 import { BudgetWpBarChart } from './components/BudgetWpBarChart';
 import { BudgetRingChart } from './components/BudgetRingChart';
+import { UpdateChecker } from './components/UpdateChecker';
 
 import { Welcome } from './screens/Welcome';
 import { ProjectSetup } from './screens/ProjectSetup';
@@ -67,6 +68,7 @@ export function App() {
   if (screen === 'welcome') {
     return (
       <div className="app-root app-root--welcome">
+        <UpdateChecker />
         <Welcome onNewProject={() => setScreen('project-setup')} />
       </div>
     );
@@ -75,6 +77,7 @@ export function App() {
   // ── Main wizard layout ────────────────────────────────────────────────────
   return (
     <div className="app-root">
+      <UpdateChecker />
       {/* Left sidebar: stepper + live totals */}
       <aside className="app-sidebar">
         <ProgressStepper onNavigate={goTo} />
