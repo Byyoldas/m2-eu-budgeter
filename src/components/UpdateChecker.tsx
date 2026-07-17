@@ -5,33 +5,35 @@
  * release exists (per tauri.conf.json's `plugins.updater.endpoints`, which
  * points at the GitHub Releases `latest.json` asset). If one is found, shows
  * a dismissible modal offering to download and install it in place; the app
- * relaunches itself once the install finishes. Network/parse failures during
- * the background check are swallowed — this must never block or interrupt
- * normal use of the app.
+ * relaunches itself once the install finishes.
+ *
+ * Reads/writes the shared `useUpdaterStore` rather than owning this check
+ * itself, so the Welcome screen's manual "Check for Updates" button
+ * triggers the exact same check and reuses this same modal when it finds
+ * one — the two entry points never duplicate the download/install flow.
  */
 
 import { useEffect, useState } from 'react';
-import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { useUpdaterStore } from '../store/updaterStore';
 
 type Phase = 'idle' | 'downloading' | 'installing' | 'error';
 
 export function UpdateChecker() {
-  const [update, setUpdate] = useState<Update | null>(null);
+  const update = useUpdaterStore((s) => s.update);
+  const checkForUpdates = useUpdaterStore((s) => s.checkForUpdates);
+  const clearUpdate = useUpdaterStore((s) => s.clearUpdate);
+
   const [dismissed, setDismissed] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    check()
-      .then((result) => {
-        if (result) setUpdate(result);
-      })
-      .catch(() => {
-        // No network, no releases yet, endpoint unreachable, etc. — this is
-        // a background check, so failures are silent rather than shown.
-      });
+    // Silent background check on launch — failures are swallowed by the
+    // store itself (result becomes 'error'), which this component ignores
+    // since it only renders when `update` is actually set.
+    checkForUpdates();
   }, []);
 
   if (!update || dismissed) return null;
@@ -66,6 +68,11 @@ export function UpdateChecker() {
     }
   };
 
+  const handleDismiss = () => {
+    setDismissed(true);
+    clearUpdate();
+  };
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal-box">
@@ -96,7 +103,7 @@ export function UpdateChecker() {
         <div className="modal-footer">
           <button
             className="btn btn--ghost"
-            onClick={() => setDismissed(true)}
+            onClick={handleDismiss}
             disabled={phase === 'downloading' || phase === 'installing'}
           >
             Later

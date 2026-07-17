@@ -113,7 +113,17 @@ export function Travel({ onNext, onBack }: TravelProps) {
     setEditingTrip(trip);
     const isItemized = trip.flight_cost_per_instance !== null;
     setTripKind(isItemized ? 'Itemized' : 'FlatAmount');
-    reset({ name: trip.name, number_of_instances: trip.number_of_instances, work_package_ids: trip.work_package_ids });
+    reset({
+      name: trip.name,
+      number_of_instances: trip.number_of_instances,
+      work_package_ids: trip.work_package_ids,
+      destination_country_code: trip.destination_country_code ?? '',
+      one_way_distance_km: trip.one_way_distance_km ?? 0,
+      number_of_nights: trip.number_of_nights ?? 1,
+      number_of_days: trip.number_of_days ?? 1,
+      domestic_transport_per_instance_eur: trip.domestic_transport_per_instance ?? '0',
+      flat_amount_per_instance_eur: isItemized ? '' : trip.per_instance_total_eur,
+    });
     setPreviewResult(null);
     setMode('edit');
   };

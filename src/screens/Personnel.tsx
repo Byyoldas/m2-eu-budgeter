@@ -115,9 +115,9 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
     reset({
       role_label: role.role_label,
       role_type: role.role_type,
-      current_monthly_salary_try: '', // user must re-enter (not stored)
+      current_monthly_salary_try: role.current_monthly_salary_try,
       fte_fraction: role.fte_fraction,
-      inflation_rate_pct: projectConfig?.default_inflation_rate_pct ?? '10',
+      inflation_rate_pct: role.inflation_rate_pct,
       start_month: role.start_month,
       end_month: role.end_month,
     });

@@ -83,7 +83,14 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
 
   const openEdit = (item: EquipmentItemDetailDto) => {
     setEditingItem(item);
-    reset({ name: item.name });
+    reset({
+      name: item.name,
+      purchase_cost_eur: item.purchase_cost_eur,
+      useful_lifetime_months: item.useful_lifetime_months,
+      grant_usage_pct: item.grant_usage_pct,
+      grant_usage_months: item.grant_usage_months,
+      work_package_id: item.work_package_id,
+    });
     setPreviewResult(null);
     setMode('edit');
   };

@@ -124,6 +124,10 @@ export interface EquipmentItemDetailDto {
   id: string; // UUID
   name: string;
   purchase_cost_eur: string; // Decimal
+  useful_lifetime_months: number;
+  grant_usage_pct: string; // Decimal
+  grant_usage_months: number;
+  work_package_id: number;
   theoretical_eligible_eur: string; // Decimal
   maximum_eligible_eur: string;     // Decimal
   is_capped: boolean;
@@ -152,6 +156,9 @@ export interface TripDetailDto {
   work_package_ids: number[];
   number_of_instances: number;
   destination_country_code: string | null;
+  one_way_distance_km: number | null;
+  number_of_nights: number | null;
+  number_of_days: number | null;
   flight_cost_per_instance: string | null;
   accommodation_cost_per_instance: string | null;
   subsistence_cost_per_instance: string | null;

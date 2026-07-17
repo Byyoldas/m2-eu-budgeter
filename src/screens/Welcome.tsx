@@ -6,6 +6,7 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { loadProject } from '../ipc/commands';
 import { useProjectStore } from '../store/projectStore';
+import { useUpdaterStore } from '../store/updaterStore';
 import type { AppError } from '../types';
 
 interface WelcomeProps {
@@ -18,6 +19,10 @@ export function Welcome({ onNewProject }: WelcomeProps) {
   const setScreen = useProjectStore((s) => s.setScreen);
   const setGlobalError = useProjectStore((s) => s.setGlobalError);
   const setLoading = useProjectStore((s) => s.setLoading);
+
+  const updateResult = useUpdaterStore((s) => s.result);
+  const updateCurrentVersion = useUpdaterStore((s) => s.currentVersion);
+  const checkForUpdates = useUpdaterStore((s) => s.checkForUpdates);
 
   const handleOpen = async () => {
     try {
@@ -62,6 +67,26 @@ export function Welcome({ onNewProject }: WelcomeProps) {
           .ercbudget files are saved locally on your computer.<br />
           Your data never leaves this device.
         </p>
+
+        <div className="welcome-update-check">
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={checkForUpdates}
+            disabled={updateResult === 'checking'}
+          >
+            {updateResult === 'checking' ? 'Checking…' : '🔄 Check for Updates'}
+          </button>
+          {updateResult === 'up-to-date' && (
+            <span className="welcome-update-status">
+              You're up to date{updateCurrentVersion ? ` (v${updateCurrentVersion})` : ''}.
+            </span>
+          )}
+          {updateResult === 'error' && (
+            <span className="welcome-update-status welcome-update-status--error">
+              Couldn't check for updates. Check your internet connection and try again.
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

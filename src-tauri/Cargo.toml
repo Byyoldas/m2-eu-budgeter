@@ -1,6 +1,6 @@
 [package]
 name = "erc-budget"
-version = "1.5.0"
+version = "1.6.0"
 description = "ERC Consolidator Grant Budget Tool"
 authors = ["ERC Budget Team"]
 edition = "2021"

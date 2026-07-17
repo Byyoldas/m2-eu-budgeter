@@ -144,6 +144,13 @@ pub struct EquipmentItemDetailDto {
     pub name: String,
     #[serde(with = "rust_decimal::serde::str")]
     pub purchase_cost_eur: Decimal,
+    /// Raw inputs, echoed back so the edit form can be pre-populated (not
+    /// derivable from the computed fields below).
+    pub useful_lifetime_months: u32,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub grant_usage_pct: Decimal,
+    pub grant_usage_months: u32,
+    pub work_package_id: u8,
     #[serde(with = "rust_decimal::serde::str")]
     pub theoretical_eligible_eur: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
@@ -186,6 +193,12 @@ pub struct TripDetailDto {
     pub number_of_instances: u32,
     /// None for flat-amount trips, which have no destination/breakdown.
     pub destination_country_code: Option<String>,
+    /// Raw itemized-trip inputs (None for flat-amount trips), echoed back so
+    /// the edit form can be pre-populated — these aren't derivable from the
+    /// computed per-instance costs below.
+    pub one_way_distance_km: Option<u32>,
+    pub number_of_nights: Option<u32>,
+    pub number_of_days: Option<u32>,
     /// Per-instance cost details (None for flat-amount trips that have no breakdown).
     pub flight_cost_per_instance: Option<String>,
     pub accommodation_cost_per_instance: Option<String>,
