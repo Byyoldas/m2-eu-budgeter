@@ -7,6 +7,21 @@
 
 ---
 
+> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+>
+> CALC-01 through CALC-11 (currency conversion, salary projection, equipment depreciation, flight/accommodation/subsistence lookups) remain algorithmically accurate — those formulas didn't change. The following did:
+>
+> - **CALC-03/CALC-04 (Personnel cost)**: "active years" was replaced with a `start_month`/`end_month` charging period; the per-year cost is now computed by *prorating* the months of that period falling within each project year (0-12 months, not an all-or-nothing 12-or-0 split as originally specified).
+> - **CALC-12/CALC-13 (Travel/C3 category totals)**: no longer bucketed "per year" — `project_year` doesn't exist on these entities anymore, so these are now flat sums. The "Annual Travel Budget" framing in CALC-12's title is stale.
+> - **New: CALC-20a — Personnel Cost Allocation by Work Package** (not in this document at all). Implemented in `src-tauri/src/calculation/personnel_cost.rs::allocate_personnel_cost_by_wp`: walks every month of a role's charging period, finds every Work Package whose own timeline contains that month, and splits that month's inflation-adjusted salary evenly across all of them.
+> - **New: CALC-20 — Per-Work-Package Budget Aggregation** (not in this document at all). Implemented in `src-tauri/src/calculation/wp_budget.rs`: sums Personnel (via CALC-20a), Equipment, Travel, Other Costs, and Subcontracting into one `WpBudgetDto` per Work Package.
+> - **CALC-16 (Total Eligible Costs)** is unaffected — still `Total Direct Costs + Indirect Costs (E)` — but note Subcontracting's business rule (whether it's in the Direct Costs feeding into this formula) has changed; see `business-rules.md`'s implementation note.
+> - **CALC-19 (Full Budget Summary)** now additionally orchestrates CALC-20a and CALC-20 as its final steps before assembling the DTO.
+>
+> The current, executable specification is the Rust source itself (`src-tauri/src/calculation/*.rs`), each with inline `#[cfg(test)]` worked examples analogous to this document's "Worked Examples" sections — treat those as the up-to-date equivalent of this document for anything CALC-12 or later touches.
+
+---
+
 ## Purpose
 
 This document specifies every calculation that the application must perform, in implementation-ready form. Each specification is self-contained: a developer can read one CALC entry and implement the corresponding function without consulting any other document. No code is written here — only the algorithm, types, precision rules, validation, error handling, and worked examples that constrain the implementation.

@@ -7,6 +7,20 @@
 
 ---
 
+> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+>
+> The app is now called **M2-EU Budgeter** (renamed from "ERC Budget Tool"). The step order, dashboard, and CFS/save/export sections of this manual are still accurate. The following field-level details have changed:
+>
+> - **Step 4 (Personnel)**: "Active Years" is now a **Start Month / End Month** range instead of a year checklist. "Work Packages" is no longer a field on this form at all — the person's cost is now split across Work Packages **automatically**, based on which WPs' timelines overlap their Start/End Month; the resulting per-WP breakdown is shown read-only. Role Type also gained an **MSc Student** option alongside PI/PostDoc/Expert/Admin.
+> - **Step 5 (Equipment)**: "Year of Purchase" no longer exists. Work Package is now **required** (not optional) and single-select — pick the one WP the purchase is charged to.
+> - **Step 6 (Travel)**: "Project Year" no longer exists. Work Package is now **required** (at least one; cost splits evenly if you tag more than one). The Distance Calculator link now opens in your regular web browser rather than inside the app. The specific flight-band EUR figures in this section's example are outdated — the real EU Annex 2a/2b rates (flight, accommodation, subsistence) were fixed in v1.4.0; the app now shows the correct current figures, this document just hasn't been re-derived from them.
+> - **Step 7 (Other Direct Costs)**: "Project Year" no longer exists. Work Package is now **required** (at least one). Items you've added can now be properly **edited** — click Edit on any item to change its name, amount, notes, or Work Package(s).
+> - **Not covered here**: an in-app updater. The Welcome screen has a "Check for Updates" button, and the app also checks silently in the background on launch — if a newer version is available, a popup offers to download and install it automatically.
+>
+> This document otherwise reflects the app reasonably well for a proposal writer's day-to-day use — the changes above are the ones that would actually confuse a first-time user following it step by step.
+
+---
+
 ## Contents
 
 1. Introduction

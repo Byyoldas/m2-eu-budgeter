@@ -7,6 +7,17 @@
 
 ---
 
+> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+>
+> The layer architecture, data-flow cycle, state management, and persistence sections (§1-3, §6-7) are still accurate. The following have drifted since this was written:
+>
+> - **§4 (IPC Contract Summary)**: `set_subcontracting` now takes `{ amount_eur, work_package_id }` (a required WP tag was added). `add_cfs_item` now takes a real input, `{ amount_eur, work_package_ids }`, not "none" — it constructs a real C3 item rather than just flagging an existing one. `save_project` takes **no arguments** (saves to the already-known open path); it's `save_project_as(path)` that takes the path — this document's `save_project: { path: string }` row conflates the two. `get_project` (returns the current summary without a mutation) is missing from this table entirely.
+> - **§8 (Bundled Rate Data)**: the file lives at `src-tauri/src/domain/rate_data.rs`, not `persistence/rate_data.rs` — there is no `persistence` submodule split, `persistence/mod.rs` is a single file. More importantly, **the JSON example flight bands/rates shown here were always fabricated placeholder numbers**, not the real EU Annex 2a/2b figures — this was discovered and fixed in v1.4.0 for all three bundled rate-version files (~195 countries each, transcribed from the actual EU source document). Don't use the numbers in this section for anything.
+> - **§9 (Test Architecture)**: counts and the module breakdown are stale — as of v1.6.0 there are **186 Rust tests** (160 unit + 26 integration) and **116 TypeScript tests**. Notably absent from this table entirely: `calculation/wp_budget.rs` and the WP-allocation portion of `calculation/personnel_cost.rs` (CALC-20/CALC-20a, added after this document was written), `domain/rate_data.rs`'s structural + spot-check tests, and `src/export/excelExporter.test.ts` (which uses the `hyperformula` library to actually *evaluate* the Excel exporter's generated spreadsheet formulas, not just assert their text — the single most distinctive test in the whole suite, and worth reading if you're touching the Excel export).
+> - **Not covered here at all**: the Work-Package-based budgeting model (see `docs/developer-guide.md` §8 for the accurate version) and the in-app auto-updater (`docs/developer-guide.md` §14, `docs/deployment-guide.md`).
+
+---
+
 ## Contents
 
 1. System Overview

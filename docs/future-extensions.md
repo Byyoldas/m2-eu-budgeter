@@ -8,6 +8,16 @@ This guide describes how to extend the application in the most likely directions
 
 ---
 
+> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+>
+> - **§5 (Adding a New Personnel Role Type) is done** — an "MSc Student" role type was added following exactly this checklist's pattern. Still a good reference for adding another one.
+> - **§1 (Adding a New Cost Category)** has two stale file paths: `src-tauri/src/dto/mod.rs` should read `src-tauri/src/domain/dto.rs`, and `src-tauri/src/persistence/project_file.rs` should read `src-tauri/src/persistence/mod.rs` (there's no submodule split). More substantively, its design contract predates Work-Package-based budgeting — a new category today should be **Work-Package-tagged** (`work_package_ids`, split evenly across multiple selections, following the `OtherDirectCostItem` pattern), not year-tagged, and needs a corresponding entry in `calculation/wp_budget.rs`'s per-WP aggregation. `docs/developer-guide.md` §9 has an updated version of this exact checklist reflecting that.
+> - **§2 (Adding a New Rate Table Version)** — still directionally correct; `docs/developer-guide.md` §10 and `docs/deployment-guide.md` have the current, more detailed version (including the lesson learned when the originally-shipped rate tables turned out to be fabricated placeholder data rather than the real EU figures — transcribe carefully, script it, and add a spot-check test).
+> - **New extension area not covered here at all**: the in-app auto-updater (`docs/developer-guide.md` §14, `docs/deployment-guide.md` in full) — releasing a new version now requires a signed build and an updated `latest.json` manifest, not just building installers.
+> - The other sections (export formats, validation rules, multi-partner, i18n, multi-project, multi-currency, schema migration) remain forward-looking and haven't been touched — no divergence to flag, since none of them have been built yet.
+
+---
+
 ## Contents
 
 1. Adding a New Cost Category

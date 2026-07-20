@@ -7,6 +7,22 @@
 
 ---
 
+> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+>
+> The entities below describe the pre-implementation design. The actual Rust structs (`src-tauri/src/domain/entities.rs`) have diverged in these ways:
+>
+> - **`WorkPackage` (§2.2)** gained `start_month`/`end_month` (1-indexed project months) — it's no longer just an `id`/`name` label. See `docs/developer-guide.md` §8.
+> - **`PersonnelRole` (§2.3)**: `active_years: Vec<u8>` was replaced with `start_month: u32, end_month: u32`. The `work_package_ids` field described for this entity no longer exists — a role's WP allocation is now computed automatically (`allocate_personnel_cost_by_wp`), not stored as a direct field.
+> - **`EquipmentItem` (§2.4)**: any `project_year`/`year_of_purchase`-style field no longer exists; `work_package_id: u8` (single, required) replaced whatever WP field this section originally described.
+> - **`Trip` (§2.5)** and **`OtherDirectCostItem` (§2.6)**: any `project_year` field no longer exists; both now carry `work_package_ids: Vec<u8>` (non-empty, required — cost splits evenly across multiple WPs for the per-WP budget view).
+> - **`Subcontracting` (§2.7)**: gained `work_package_id: u8` (required) and is a real, non-placeholder amount — see the note in `business-rules.md`.
+> - **`BudgetSummary` (§3.5)**: gained `wp_budgets: Vec<WpBudgetDto>` (one entry per Work Package, summing all five categories) — there is no equivalent "per-year breakdown" entity anywhere in the current implementation; anywhere this document implies year-indexed output arrays for Equipment/Travel/OtherCosts, read it as WP-indexed instead.
+> - **`EUTravelRateVersion`/`Country`/`FlightDistanceBand` (Part 1)**: structurally accurate, but the actual bundled data was fabricated placeholder data until v1.4.0, when it was replaced with the real EU Annex 2a/2b figures for all three rate-version tiers.
+>
+> The current, authoritative field-level definitions live in `src-tauri/src/domain/entities.rs` and `src-tauri/src/domain/dto.rs` directly — treat this document as historical design intent, not a current reference.
+
+---
+
 ## How to Read This Document
 
 This document describes every meaningful concept (entity) in the HE Budget application domain. Entities are the things the software creates, stores, computes, and displays. Each entity is described with:

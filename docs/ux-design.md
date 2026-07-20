@@ -7,6 +7,18 @@
 
 ---
 
+> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+>
+> The overall shell, step order (Work Packages already correctly appears before Personnel in this document), and Add/Edit-form interaction pattern described here are still accurate. The following details have changed:
+>
+> - **§4b (Personnel form)**: "Active project years" (checkboxes) is now a **Start Month / End Month** field pair instead. The "Work Package (optional, multi-select)" field no longer exists on this form — a role's WP breakdown is computed automatically and shown read-only (per-WP cost) rather than picked by the user.
+> - **§5b/§6b/§7c (Equipment/Travel/Other Costs forms)**: any "Project Year" field no longer exists. Work Package is **required** (single-select for Equipment, multi-select for Travel/Other Costs) rather than optional.
+> - **§8a (Budget Summary Table)**: the columns are now **one per Work Package**, not one per project year — "Year 1 … Year 5" should read "WP1 … WPn". Equipment is no longer a special-cased "project total, not split" row; every category (including Equipment) now has a real per-WP breakdown, since WP is now load-bearing rather than informational.
+> - **New, not described anywhere in this document**: a "Check for Updates" control on the Welcome screen (Screen 0), and an in-app "Update Available" modal that can appear on any screen (background-checked on launch).
+> - A subtlety worth knowing if you're extending an Add/Edit form: the backend's `*DetailDto` for that entity must carry every field the Add form collects, or the Edit form will silently show it blank — this exact bug shipped for Equipment, Travel, and Personnel and was fixed in v1.6.0. See `docs/developer-guide.md` §5.
+
+---
+
 ## Design Principles
 
 These principles govern every decision in this document and must be respected throughout implementation.

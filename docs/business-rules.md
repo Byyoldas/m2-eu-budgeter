@@ -7,6 +7,21 @@
 
 ---
 
+> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+>
+> This document was written before implementation and several of its rules have since been superseded. The most important divergences:
+>
+> - **PS-01 / WP-01 — Work Packages are no longer informational-only.** Each WP now has a required **Start Month / End Month** (not just a name), and Work Packages must **collectively cover the entire project duration with no gaps** (overlaps are fine). This is load-bearing: it's what makes automatic Personnel WP-cost allocation (below) possible without ever silently dropping a cost.
+> - **PE-01 — "Active project years" no longer exists.** Personnel roles have a **Start Month / End Month** charging period instead (1-indexed project months). Their cost is **automatically allocated across Work Packages** month-by-month based on WP-timeline overlap — the "Work Package assignment" field described here (a manual multi-select that "does not currently affect cost calculations") was removed entirely; WP assignment for personnel is now a computed output, not a user input.
+> - **All cost categories are now organised by Work Package, not by project year**, for reporting/export purposes. Personnel still tracks project years internally for salary inflation compounding (PE-02 is still accurate), but the year-by-year *breakdown* described throughout this document for Equipment, Travel, and Other Direct Costs (`project_year` fields, per-year totals) no longer exists — those categories are tagged directly with Work Package(s) instead, and a per-WP budget view (not described anywhere in this document) is what the Review & Export screen and Excel export actually show.
+> - **SC-01 — Subcontracting is no longer a zero-value placeholder.** It's a real amount with a required Work Package tag. **It is included in Total Eligible Costs / Requested EU Contribution, but excluded from the Indirect Cost (E) base** — this exact rule has been flipped back and forth twice during development; if it's ever questioned again, confirm with the current project owner rather than trusting any single past version of this document.
+> - **PT-02's formula is still accurate** (`Total Eligible Costs = Total Direct Costs + Indirect Costs`) — Total Direct Costs (PT-01) already includes Category B (Subcontracting), so no separate adjustment was needed once SC-01 became real.
+> - The EU travel rate figures used in TR-02/03/04's worked examples reflect placeholder data from before implementation, not the real EU Annex 2a/2b tables now bundled with the app (fixed in v1.4.0) — don't use this document's numeric examples as a source of truth for actual rates.
+>
+> See `docs/developer-guide.md` §8 ("Work-Package-Based Budgeting") for the current, accurate description of how cost allocation actually works.
+
+---
+
 ## How to Read This Document
 
 Each rule is written in plain business language. Rules describe **what the application must do and why** — not how the spreadsheet implemented it. Rules are grouped by domain and numbered with a prefix:
