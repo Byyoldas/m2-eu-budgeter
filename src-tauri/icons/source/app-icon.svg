@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 200 200">
+<defs>
+  <polygon id="starA" points="0,-8 1.88,-2.59 7.61,-2.47 3.04,0.99 4.70,6.47 0,3.2 -4.70,6.47 -3.04,0.99 -7.61,-2.47 -1.88,-2.59" fill="#FFCE00"/>
+</defs>
+<rect x="0" y="0" width="200" height="200" rx="44" fill="#0B2D6B"/>
+<use href="#starA" transform="translate(100,34)"/>
+<use href="#starA" transform="translate(133,42.84)"/>
+<use href="#starA" transform="translate(157.16,67)"/>
+<use href="#starA" transform="translate(166,100)"/>
+<use href="#starA" transform="translate(157.16,133)"/>
+<use href="#starA" transform="translate(133,157.16)"/>
+<use href="#starA" transform="translate(100,166)"/>
+<use href="#starA" transform="translate(67,157.16)"/>
+<use href="#starA" transform="translate(42.84,133)"/>
+<use href="#starA" transform="translate(34,100)"/>
+<use href="#starA" transform="translate(42.84,67)"/>
+<use href="#starA" transform="translate(67,42.84)"/>
+<path d="M130,121.9 A34,34 0 1 1 130,78.1" fill="none" stroke="#FFCE00" stroke-width="15" stroke-linecap="round"/>
+<line x1="80" y1="88" x2="112" y2="88" stroke="#FFCE00" stroke-width="11" stroke-linecap="round"/>
+<line x1="80" y1="112" x2="112" y2="112" stroke="#FFCE00" stroke-width="11" stroke-linecap="round"/>
+</svg>
