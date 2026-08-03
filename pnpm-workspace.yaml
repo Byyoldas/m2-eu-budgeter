@@ -1,5 +1,6 @@
 packages:
   - "erc-budget"
+  - "erc-execution"
 
 allowBuilds:
   esbuild: true

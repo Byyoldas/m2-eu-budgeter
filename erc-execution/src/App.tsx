@@ -1,0 +1,50 @@
+/**
+ * Root application component.
+ *
+ * Layout: fixed left sidebar + scrollable right content area, once a project
+ * is open. Before that, the Welcome screen fills the whole window.
+ */
+
+import { useExecutionStore } from './store/executionStore';
+import { useAutoSave } from './hooks/useAutoSave';
+import { Sidebar } from './components/Sidebar';
+import { Welcome } from './screens/Welcome';
+import { Dashboard } from './screens/Dashboard';
+import { Personnel } from './screens/Personnel';
+import { WorkPackages } from './screens/WorkPackages';
+import { Milestones } from './screens/Milestones';
+import { Amendments } from './screens/Amendments';
+import './App.css';
+
+export function App() {
+  const activeScreen = useExecutionStore((s) => s.activeScreen);
+
+  useAutoSave();
+
+  if (activeScreen === 'welcome') {
+    return <Welcome />;
+  }
+
+  const renderScreen = () => {
+    switch (activeScreen) {
+      case 'personnel':
+        return <Personnel />;
+      case 'work-packages':
+        return <WorkPackages />;
+      case 'milestones':
+        return <Milestones />;
+      case 'amendments':
+        return <Amendments />;
+      case 'dashboard':
+      default:
+        return <Dashboard />;
+    }
+  };
+
+  return (
+    <div className="app-shell">
+      <Sidebar />
+      <main className="content-area">{renderScreen()}</main>
+    </div>
+  );
+}

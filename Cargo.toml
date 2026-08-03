@@ -2,9 +2,6 @@
 members = [
     "erc-core",
     "erc-budget/src-tauri",
+    "erc-execution/src-tauri",
 ]
 resolver = "2"
-
-# erc-execution/src-tauri joins this list once Milestone 1 (erc-core
-# extraction) is complete and the Execution App scaffold exists — see
-# docs/executer/development-roadmap.md Milestone 2, Sprint E1.

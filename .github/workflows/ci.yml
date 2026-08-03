@@ -38,7 +38,7 @@ jobs:
           }
 
   frontend:
-    name: erc-budget frontend (test, build)
+    name: Frontend workspaces (test, build)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,8 +55,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: pnpm test
+      - name: pnpm test (erc-budget)
         run: pnpm --filter m2-eu-budgeter test
 
-      - name: pnpm build
+      - name: pnpm build (erc-budget)
         run: pnpm --filter m2-eu-budgeter build
+
+      - name: pnpm test (erc-execution)
+        run: pnpm --filter erc-execution test
+
+      - name: pnpm build (erc-execution)
+        run: pnpm --filter erc-execution build
