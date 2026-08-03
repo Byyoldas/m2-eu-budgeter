@@ -1,7 +1,7 @@
 /**
- * Left navigation panel. Sprint E2 adds Personnel/Work Packages/Milestones
- * (M-03/M-04/M-06) and Amendments as real screens; the rest wait for their
- * sprint (E3: Financials/Travel/Equipment/Other Costs/Subcontracting, E4:
+ * Left navigation panel. Sprint E2 added Personnel/Work Packages/Milestones
+ * (M-03/M-04/M-06) and Amendments; Sprint E3 adds Travel/Equipment/Other
+ * Costs/Subcontracting (M-08–M-11). The rest wait for their sprint (E4:
  * Documents/Reports, E5: Risk/Issues/Periods).
  */
 
@@ -14,10 +14,10 @@ const MODULES: { label: string; screen: ExecutionScreen | null }[] = [
   { label: 'Personnel', screen: 'personnel' },
   { label: 'Milestones', screen: 'milestones' },
   { label: 'Amendments', screen: 'amendments' },
-  { label: 'Travel', screen: null },
-  { label: 'Equipment', screen: null },
-  { label: 'Other Costs', screen: null },
-  { label: 'Subcontracting', screen: null },
+  { label: 'Travel', screen: 'travel' },
+  { label: 'Equipment', screen: 'equipment' },
+  { label: 'Other Costs', screen: 'other-costs' },
+  { label: 'Subcontracting', screen: 'subcontracting' },
   { label: 'Risk Register', screen: null },
   { label: 'Issue Log', screen: null },
   { label: 'Reporting Periods', screen: null },

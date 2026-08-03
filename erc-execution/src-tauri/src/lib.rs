@@ -68,6 +68,22 @@ pub fn run() {
             commands::amendments::record_amendment,
             commands::amendments::update_amendment,
             commands::amendments::delete_amendment,
+            // M-08: Travel Tracking
+            commands::travel::add_trip_execution,
+            commands::travel::update_trip_execution,
+            commands::travel::delete_trip_execution,
+            // M-09: Equipment Tracking
+            commands::equipment::add_equipment_procurement,
+            commands::equipment::update_equipment_procurement,
+            commands::equipment::delete_equipment_procurement,
+            // M-10: Other Costs Tracking
+            commands::other_costs::add_actual_cost_entry,
+            commands::other_costs::update_actual_cost_entry,
+            commands::other_costs::delete_actual_cost_entry,
+            // M-11: Subcontracting Tracking
+            commands::subcontracting::add_subcontracting_line,
+            commands::subcontracting::update_subcontracting_line,
+            commands::subcontracting::delete_subcontracting_line,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

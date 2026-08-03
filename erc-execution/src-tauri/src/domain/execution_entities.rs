@@ -10,7 +10,7 @@
 //! numeric rules per calendar month instead; this can be re-expressed in
 //! terms of periods once M-14 exists without changing the stored data shape.
 
-use super::enums::{AmendmentStatus, AmendmentType, MilestoneStatus};
+use super::enums::{AmendmentStatus, AmendmentType, EntryStatus, MilestoneStatus};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -31,6 +31,14 @@ pub struct ExecutionData {
     pub milestones: Vec<Milestone>,
     #[serde(default)]
     pub amendments: Vec<Amendment>,
+    #[serde(default)]
+    pub trip_executions: Vec<TripExecution>,
+    #[serde(default)]
+    pub equipment_procurements: Vec<EquipmentProcurement>,
+    #[serde(default)]
+    pub actual_cost_entries: Vec<ActualCostEntry>,
+    #[serde(default)]
+    pub subcontracting_lines: Vec<SubcontractingLine>,
 }
 
 impl Default for ExecutionData {
@@ -42,6 +50,10 @@ impl Default for ExecutionData {
             work_package_executions: Vec::new(),
             milestones: Vec::new(),
             amendments: Vec::new(),
+            trip_executions: Vec::new(),
+            equipment_procurements: Vec::new(),
+            actual_cost_entries: Vec::new(),
+            subcontracting_lines: Vec::new(),
         }
     }
 }
@@ -127,6 +139,72 @@ pub struct Amendment {
     pub notes: Option<String>,
 }
 
+/// One actual travel instance against a planned `erc_core::domain::entities::Trip`
+/// (M-08). BR-TR-01: one `TripExecution` per instance of a planned trip.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TripExecution {
+    pub id: Uuid,
+    /// References `erc_core::domain::entities::Trip.id`.
+    pub trip_id: Uuid,
+    /// 1-indexed; unique per `trip_id` (validated, not type-enforced).
+    pub instance_number: u32,
+    /// References `Person.id` — BR-TR-06.
+    pub traveller_person_id: Uuid,
+    pub actual_travel_date: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub actual_cost_eur: Decimal,
+    /// BR-TR-05: only `Approved` entries count toward Category C1 actuals.
+    pub status: EntryStatus,
+}
+
+/// An actual equipment purchase against a planned `erc_core::domain::entities::EquipmentItem`
+/// (M-09).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EquipmentProcurement {
+    pub id: Uuid,
+    /// References `erc_core::domain::entities::EquipmentItem.id`.
+    pub equipment_item_id: Uuid,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub actual_purchase_cost_eur: Decimal,
+    pub purchase_date: String,
+    /// BR-EQ-04: excluded from actuals until `true`.
+    pub delivery_confirmed: bool,
+}
+
+/// A Category C3 (Other Direct Costs) actual expenditure (M-10). May link to
+/// a planned `OtherDirectCostItem`, or stand alone as an unbudgeted item
+/// (BR-OC-03, which then requires `justification`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ActualCostEntry {
+    pub id: Uuid,
+    /// References `erc_core::domain::entities::OtherDirectCostItem.id`, if any.
+    pub linked_entity_id: Option<Uuid>,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub amount_eur: Decimal,
+    pub description: String,
+    pub incurred_date: String,
+    pub status: EntryStatus,
+    /// Required when `linked_entity_id` is `None` (BR-OC-03).
+    pub justification: Option<String>,
+}
+
+/// An actual subcontracting contract line against the project's single
+/// planned `Subcontracting` lump sum (M-11).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SubcontractingLine {
+    pub id: Uuid,
+    pub vendor: String,
+    pub contract_reference: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub amount_eur: Decimal,
+    pub work_package_id: u8,
+    pub status: EntryStatus,
+    /// BR-SC-04 advisory check input (self-declared — the app has no
+    /// external institution registry to verify this against).
+    pub vendor_is_host_institution: bool,
+    pub payment_date: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,6 +218,10 @@ mod tests {
         assert!(data.work_package_executions.is_empty());
         assert!(data.milestones.is_empty());
         assert!(data.amendments.is_empty());
+        assert!(data.trip_executions.is_empty());
+        assert!(data.equipment_procurements.is_empty());
+        assert!(data.actual_cost_entries.is_empty());
+        assert!(data.subcontracting_lines.is_empty());
     }
 
     #[test]

@@ -1,16 +1,17 @@
 //! Execution-specific validation. Imports the shared field-level validators
 //! from `erc-core` where applicable; everything here enforces business rules
-//! specific to M-03/M-04/M-06 and the from-scratch Amendment Management
-//! design (see `domain::enums::AmendmentType` doc comment).
+//! specific to M-03/M-04/M-06/M-08/M-09/M-10/M-11 and the from-scratch
+//! Amendment Management design (see `domain::enums::AmendmentType` doc comment).
 
 use crate::domain::dto::{
-    AmendmentInputDto, MilestoneInputDto, PersonInputDto, PersonMonthRecordInputDto,
+    ActualCostEntryInputDto, AmendmentInputDto, EquipmentProcurementInputDto, MilestoneInputDto,
+    PersonInputDto, PersonMonthRecordInputDto, SubcontractingLineInputDto, TripExecutionInputDto,
     WorkPackageExecutionInputDto,
 };
 use crate::domain::enums::MilestoneStatus;
-use crate::domain::execution_entities::Person;
+use crate::domain::execution_entities::{Person, SubcontractingLine, TripExecution};
 use crate::error::{AppError, FieldError, ValidationErrors};
-use erc_core::domain::entities::PersonnelRole;
+use erc_core::domain::entities::{EquipmentItem, OtherDirectCostItem, PersonnelRole, Trip};
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
@@ -313,6 +314,239 @@ pub fn validate_amendment(dto: &AmendmentInputDto, work_package_count: u8) -> Re
             ));
             break;
         }
+    }
+
+    errors.into_result()
+}
+
+// ─── M-08: Travel Tracking ──────────────────────────────────────────────────────
+
+/// # Arguments
+/// * `exclude_id` — this record's own id, when validating an update (excluded
+///   from the "one execution per instance" uniqueness check).
+pub fn validate_trip_execution(
+    dto: &TripExecutionInputDto,
+    trips: &[Trip],
+    persons: &[Person],
+    existing_executions: &[TripExecution],
+    exclude_id: Option<Uuid>,
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    match trips.iter().find(|t| t.id == dto.trip_id) {
+        None => errors.push(FieldError::new(
+            "trip_id",
+            "NOT_FOUND",
+            "Trip does not exist in this project's budget.",
+        )),
+        Some(trip) => {
+            if dto.instance_number == 0 || dto.instance_number > trip.number_of_instances {
+                errors.push(FieldError::new(
+                    "instance_number",
+                    "OUT_OF_RANGE",
+                    format!(
+                        "Instance number must be between 1 and {}.",
+                        trip.number_of_instances
+                    ),
+                ));
+            }
+            let duplicate = existing_executions.iter().any(|e| {
+                e.trip_id == dto.trip_id
+                    && e.instance_number == dto.instance_number
+                    && Some(e.id) != exclude_id
+            });
+            if duplicate {
+                errors.push(FieldError::new(
+                    "instance_number",
+                    "DUPLICATE_INSTANCE",
+                    "This trip instance already has an execution record.",
+                ));
+            }
+        }
+    }
+
+    if !persons.iter().any(|p| p.id == dto.traveller_person_id) {
+        errors.push(FieldError::new(
+            "traveller_person_id",
+            "NOT_FOUND",
+            "Traveller does not exist in this project.",
+        ));
+    }
+
+    if parse_iso_date(&dto.actual_travel_date).is_none() {
+        errors.push(FieldError::new(
+            "actual_travel_date",
+            "INVALID_DATE",
+            "Actual travel date must be a valid date (YYYY-MM-DD).",
+        ));
+    }
+
+    if dto.actual_cost_eur <= Decimal::ZERO {
+        errors.push(FieldError::new(
+            "actual_cost_eur",
+            "NOT_POSITIVE",
+            "Actual cost must be greater than zero.",
+        ));
+    }
+
+    errors.into_result()
+}
+
+// ─── M-09: Equipment Tracking ───────────────────────────────────────────────────
+
+pub fn validate_equipment_procurement(
+    dto: &EquipmentProcurementInputDto,
+    equipment_items: &[EquipmentItem],
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    if !equipment_items
+        .iter()
+        .any(|e| e.id == dto.equipment_item_id)
+    {
+        errors.push(FieldError::new(
+            "equipment_item_id",
+            "NOT_FOUND",
+            "Equipment item does not exist in this project's budget.",
+        ));
+    }
+
+    if dto.actual_purchase_cost_eur <= Decimal::ZERO {
+        errors.push(FieldError::new(
+            "actual_purchase_cost_eur",
+            "NOT_POSITIVE",
+            "Actual purchase cost must be greater than zero.",
+        ));
+    }
+
+    if parse_iso_date(&dto.purchase_date).is_none() {
+        errors.push(FieldError::new(
+            "purchase_date",
+            "INVALID_DATE",
+            "Purchase date must be a valid date (YYYY-MM-DD).",
+        ));
+    }
+
+    errors.into_result()
+}
+
+// ─── M-10: Other Costs Tracking ─────────────────────────────────────────────────
+
+pub fn validate_actual_cost_entry(
+    dto: &ActualCostEntryInputDto,
+    other_cost_items: &[OtherDirectCostItem],
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    match dto.linked_entity_id {
+        Some(linked_id) => {
+            if !other_cost_items.iter().any(|i| i.id == linked_id) {
+                errors.push(FieldError::new(
+                    "linked_entity_id",
+                    "NOT_FOUND",
+                    "Linked other cost item does not exist in this project's budget.",
+                ));
+            }
+        }
+        // BR-OC-03: unbudgeted entries require justification.
+        None => {
+            if dto.justification.as_deref().unwrap_or("").trim().is_empty() {
+                errors.push(FieldError::new(
+                    "justification",
+                    "REQUIRED",
+                    "Justification is required for unbudgeted cost entries.",
+                ));
+            }
+        }
+    }
+
+    if dto.amount_eur <= Decimal::ZERO {
+        errors.push(FieldError::new(
+            "amount_eur",
+            "NOT_POSITIVE",
+            "Amount must be greater than zero.",
+        ));
+    }
+
+    if dto.description.trim().is_empty() {
+        errors.push(FieldError::new(
+            "description",
+            "REQUIRED",
+            "Description is required.",
+        ));
+    }
+
+    if parse_iso_date(&dto.incurred_date).is_none() {
+        errors.push(FieldError::new(
+            "incurred_date",
+            "INVALID_DATE",
+            "Incurred date must be a valid date (YYYY-MM-DD).",
+        ));
+    }
+
+    errors.into_result()
+}
+
+// ─── M-11: Subcontracting Tracking ──────────────────────────────────────────────
+
+/// # Arguments
+/// * `exclude_id` — this line's own id, when validating an update (excluded
+///   from the BR-SC-01 cap check).
+pub fn validate_subcontracting_line(
+    dto: &SubcontractingLineInputDto,
+    existing_lines: &[SubcontractingLine],
+    planned_amount_eur: Decimal,
+    work_package_count: u8,
+    exclude_id: Option<Uuid>,
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    if dto.vendor.trim().is_empty() {
+        errors.push(FieldError::new("vendor", "REQUIRED", "Vendor is required."));
+    }
+    if dto.contract_reference.trim().is_empty() {
+        errors.push(FieldError::new(
+            "contract_reference",
+            "REQUIRED",
+            "Contract reference is required.",
+        ));
+    }
+    if dto.amount_eur <= Decimal::ZERO {
+        errors.push(FieldError::new(
+            "amount_eur",
+            "NOT_POSITIVE",
+            "Amount must be greater than zero.",
+        ));
+    }
+    if dto.work_package_id == 0 || dto.work_package_id > work_package_count {
+        errors.push(FieldError::new(
+            "work_package_id",
+            "OUT_OF_RANGE",
+            "Work package does not exist in this project.",
+        ));
+    }
+    if let Some(date) = &dto.payment_date {
+        if parse_iso_date(date).is_none() {
+            errors.push(FieldError::new(
+                "payment_date",
+                "INVALID_DATE",
+                "Payment date must be a valid date (YYYY-MM-DD).",
+            ));
+        }
+    }
+
+    // BR-SC-01: total of all lines must not exceed the planned lump sum.
+    let existing_total: Decimal = existing_lines
+        .iter()
+        .filter(|l| Some(l.id) != exclude_id)
+        .map(|l| l.amount_eur)
+        .sum();
+    if existing_total + dto.amount_eur > planned_amount_eur {
+        errors.push(FieldError::new(
+            "amount_eur",
+            "EXCEEDS_PLANNED_SUBCONTRACTING",
+            "Total subcontracting lines cannot exceed the planned subcontracting amount.",
+        ));
     }
 
     errors.into_result()
@@ -721,5 +955,325 @@ mod tests {
         let mut dto = amendment_dto();
         dto.affected_work_package_ids = vec![9];
         assert!(validate_amendment(&dto, 3).is_err());
+    }
+
+    // ─── validate_trip_execution ────────────────────────────────────────
+
+    use erc_core::domain::entities::TripType;
+
+    fn make_trip(id: Uuid, instances: u32) -> Trip {
+        Trip {
+            id,
+            name: "Conference".to_string(),
+            trip_type: TripType::FlatAmount {
+                flat_amount_per_instance_eur: dec!(500),
+            },
+            number_of_instances: instances,
+            work_package_ids: vec![1],
+        }
+    }
+
+    fn make_person(id: Uuid) -> Person {
+        Person {
+            id,
+            full_name: "Ada Lovelace".to_string(),
+            email: None,
+            institution: None,
+            orcid: None,
+            linked_role_id: Uuid::new_v4(),
+            actual_start_date: "2026-01-01".to_string(),
+            actual_end_date: None,
+        }
+    }
+
+    fn trip_execution_dto(trip_id: Uuid, person_id: Uuid, instance: u32) -> TripExecutionInputDto {
+        TripExecutionInputDto {
+            trip_id,
+            instance_number: instance,
+            traveller_person_id: person_id,
+            actual_travel_date: "2026-03-01".to_string(),
+            actual_cost_eur: dec!(500),
+            status: crate::domain::enums::EntryStatus::Approved,
+        }
+    }
+
+    #[test]
+    fn test_val_te_valid() {
+        let trip_id = Uuid::new_v4();
+        let person_id = Uuid::new_v4();
+        let trips = vec![make_trip(trip_id, 2)];
+        let persons = vec![make_person(person_id)];
+        let dto = trip_execution_dto(trip_id, person_id, 1);
+        assert!(validate_trip_execution(&dto, &trips, &persons, &[], None).is_ok());
+    }
+
+    #[test]
+    fn test_val_te_unknown_trip_returns_error() {
+        let person_id = Uuid::new_v4();
+        let persons = vec![make_person(person_id)];
+        let dto = trip_execution_dto(Uuid::new_v4(), person_id, 1);
+        assert!(validate_trip_execution(&dto, &[], &persons, &[], None).is_err());
+    }
+
+    #[test]
+    fn test_val_te_instance_out_of_range_returns_error() {
+        let trip_id = Uuid::new_v4();
+        let person_id = Uuid::new_v4();
+        let trips = vec![make_trip(trip_id, 2)];
+        let persons = vec![make_person(person_id)];
+        let dto = trip_execution_dto(trip_id, person_id, 5);
+        assert!(validate_trip_execution(&dto, &trips, &persons, &[], None).is_err());
+    }
+
+    #[test]
+    fn test_val_te_unknown_traveller_returns_error() {
+        let trip_id = Uuid::new_v4();
+        let trips = vec![make_trip(trip_id, 2)];
+        let dto = trip_execution_dto(trip_id, Uuid::new_v4(), 1);
+        assert!(validate_trip_execution(&dto, &trips, &[], &[], None).is_err());
+    }
+
+    #[test]
+    fn test_val_te_duplicate_instance_returns_error() {
+        let trip_id = Uuid::new_v4();
+        let person_id = Uuid::new_v4();
+        let trips = vec![make_trip(trip_id, 2)];
+        let persons = vec![make_person(person_id)];
+        let existing = TripExecution {
+            id: Uuid::new_v4(),
+            trip_id,
+            instance_number: 1,
+            traveller_person_id: person_id,
+            actual_travel_date: "2026-03-01".to_string(),
+            actual_cost_eur: dec!(500),
+            status: crate::domain::enums::EntryStatus::Approved,
+        };
+        let dto = trip_execution_dto(trip_id, person_id, 1);
+        assert!(validate_trip_execution(&dto, &trips, &persons, &[existing], None).is_err());
+    }
+
+    #[test]
+    fn test_val_te_update_excludes_self_from_duplicate_check() {
+        let trip_id = Uuid::new_v4();
+        let person_id = Uuid::new_v4();
+        let self_id = Uuid::new_v4();
+        let trips = vec![make_trip(trip_id, 2)];
+        let persons = vec![make_person(person_id)];
+        let existing = TripExecution {
+            id: self_id,
+            trip_id,
+            instance_number: 1,
+            traveller_person_id: person_id,
+            actual_travel_date: "2026-03-01".to_string(),
+            actual_cost_eur: dec!(500),
+            status: crate::domain::enums::EntryStatus::Approved,
+        };
+        let dto = trip_execution_dto(trip_id, person_id, 1);
+        assert!(
+            validate_trip_execution(&dto, &trips, &persons, &[existing], Some(self_id)).is_ok()
+        );
+    }
+
+    #[test]
+    fn test_val_te_zero_cost_returns_error() {
+        let trip_id = Uuid::new_v4();
+        let person_id = Uuid::new_v4();
+        let trips = vec![make_trip(trip_id, 2)];
+        let persons = vec![make_person(person_id)];
+        let mut dto = trip_execution_dto(trip_id, person_id, 1);
+        dto.actual_cost_eur = dec!(0);
+        assert!(validate_trip_execution(&dto, &trips, &persons, &[], None).is_err());
+    }
+
+    // ─── validate_equipment_procurement ─────────────────────────────────
+
+    fn make_equipment_item(id: Uuid) -> EquipmentItem {
+        EquipmentItem {
+            id,
+            name: "Laptop".to_string(),
+            purchase_cost_eur: dec!(2000),
+            useful_lifetime_months: 36,
+            grant_usage_pct: dec!(100),
+            grant_usage_months: 36,
+            work_package_id: 1,
+        }
+    }
+
+    fn equipment_procurement_dto(equipment_item_id: Uuid) -> EquipmentProcurementInputDto {
+        EquipmentProcurementInputDto {
+            equipment_item_id,
+            actual_purchase_cost_eur: dec!(2000),
+            purchase_date: "2026-02-01".to_string(),
+            delivery_confirmed: true,
+        }
+    }
+
+    #[test]
+    fn test_val_ep_valid() {
+        let item_id = Uuid::new_v4();
+        let items = vec![make_equipment_item(item_id)];
+        assert!(
+            validate_equipment_procurement(&equipment_procurement_dto(item_id), &items).is_ok()
+        );
+    }
+
+    #[test]
+    fn test_val_ep_unknown_item_returns_error() {
+        assert!(
+            validate_equipment_procurement(&equipment_procurement_dto(Uuid::new_v4()), &[])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_val_ep_zero_cost_returns_error() {
+        let item_id = Uuid::new_v4();
+        let items = vec![make_equipment_item(item_id)];
+        let mut dto = equipment_procurement_dto(item_id);
+        dto.actual_purchase_cost_eur = dec!(0);
+        assert!(validate_equipment_procurement(&dto, &items).is_err());
+    }
+
+    #[test]
+    fn test_val_ep_invalid_date_returns_error() {
+        let item_id = Uuid::new_v4();
+        let items = vec![make_equipment_item(item_id)];
+        let mut dto = equipment_procurement_dto(item_id);
+        dto.purchase_date = "not-a-date".to_string();
+        assert!(validate_equipment_procurement(&dto, &items).is_err());
+    }
+
+    // ─── validate_actual_cost_entry ─────────────────────────────────────
+
+    fn make_other_cost_item(id: Uuid) -> OtherDirectCostItem {
+        OtherDirectCostItem {
+            id,
+            name: "Publication fees".to_string(),
+            amount_eur: dec!(1000),
+            is_cfs_item: false,
+            notes: None,
+            work_package_ids: vec![1],
+        }
+    }
+
+    fn actual_cost_entry_dto(linked_entity_id: Option<Uuid>) -> ActualCostEntryInputDto {
+        ActualCostEntryInputDto {
+            linked_entity_id,
+            amount_eur: dec!(500),
+            description: "Open-access fee".to_string(),
+            incurred_date: "2026-02-01".to_string(),
+            status: crate::domain::enums::EntryStatus::Approved,
+            justification: None,
+        }
+    }
+
+    #[test]
+    fn test_val_ace_valid_linked() {
+        let item_id = Uuid::new_v4();
+        let items = vec![make_other_cost_item(item_id)];
+        assert!(validate_actual_cost_entry(&actual_cost_entry_dto(Some(item_id)), &items).is_ok());
+    }
+
+    #[test]
+    fn test_val_ace_unknown_linked_item_returns_error() {
+        assert!(
+            validate_actual_cost_entry(&actual_cost_entry_dto(Some(Uuid::new_v4())), &[]).is_err()
+        );
+    }
+
+    #[test]
+    fn test_val_ace_unbudgeted_without_justification_returns_error() {
+        assert!(validate_actual_cost_entry(&actual_cost_entry_dto(None), &[]).is_err());
+    }
+
+    #[test]
+    fn test_val_ace_unbudgeted_with_justification_is_ok() {
+        let mut dto = actual_cost_entry_dto(None);
+        dto.justification = Some("Unplanned translation service.".to_string());
+        assert!(validate_actual_cost_entry(&dto, &[]).is_ok());
+    }
+
+    #[test]
+    fn test_val_ace_zero_amount_returns_error() {
+        let mut dto = actual_cost_entry_dto(None);
+        dto.justification = Some("Justified".to_string());
+        dto.amount_eur = dec!(0);
+        assert!(validate_actual_cost_entry(&dto, &[]).is_err());
+    }
+
+    // ─── validate_subcontracting_line ───────────────────────────────────
+
+    fn subcontracting_line_dto(amount: Decimal) -> SubcontractingLineInputDto {
+        SubcontractingLineInputDto {
+            vendor: "Acme Labs".to_string(),
+            contract_reference: "CTR-001".to_string(),
+            amount_eur: amount,
+            work_package_id: 1,
+            status: crate::domain::enums::EntryStatus::Approved,
+            vendor_is_host_institution: false,
+            payment_date: None,
+        }
+    }
+
+    #[test]
+    fn test_val_sl_valid() {
+        let dto = subcontracting_line_dto(dec!(1000));
+        assert!(validate_subcontracting_line(&dto, &[], dec!(5000), 3, None).is_ok());
+    }
+
+    #[test]
+    fn test_val_sl_empty_vendor_returns_error() {
+        let mut dto = subcontracting_line_dto(dec!(1000));
+        dto.vendor = "".to_string();
+        assert!(validate_subcontracting_line(&dto, &[], dec!(5000), 3, None).is_err());
+    }
+
+    #[test]
+    fn test_val_sl_exceeds_planned_cap_returns_error() {
+        let dto = subcontracting_line_dto(dec!(6000));
+        assert!(validate_subcontracting_line(&dto, &[], dec!(5000), 3, None).is_err());
+    }
+
+    #[test]
+    fn test_val_sl_cap_check_sums_existing_lines() {
+        let existing = SubcontractingLine {
+            id: Uuid::new_v4(),
+            vendor: "Existing Vendor".to_string(),
+            contract_reference: "CTR-000".to_string(),
+            amount_eur: dec!(4000),
+            work_package_id: 1,
+            status: crate::domain::enums::EntryStatus::Approved,
+            vendor_is_host_institution: false,
+            payment_date: None,
+        };
+        let dto = subcontracting_line_dto(dec!(1500));
+        // 4000 existing + 1500 new = 5500 > 5000 planned.
+        assert!(validate_subcontracting_line(&dto, &[existing], dec!(5000), 3, None).is_err());
+    }
+
+    #[test]
+    fn test_val_sl_update_excludes_self_from_cap_check() {
+        let self_id = Uuid::new_v4();
+        let existing = SubcontractingLine {
+            id: self_id,
+            vendor: "Existing Vendor".to_string(),
+            contract_reference: "CTR-000".to_string(),
+            amount_eur: dec!(4000),
+            work_package_id: 1,
+            status: crate::domain::enums::EntryStatus::Approved,
+            vendor_is_host_institution: false,
+            payment_date: None,
+        };
+        let dto = subcontracting_line_dto(dec!(4500));
+        assert!(
+            validate_subcontracting_line(&dto, &[existing], dec!(5000), 3, Some(self_id)).is_ok()
+        );
+    }
+
+    #[test]
+    fn test_val_sl_wp_out_of_range_returns_error() {
+        let mut dto = subcontracting_line_dto(dec!(1000));
+        dto.work_package_id = 9;
+        assert!(validate_subcontracting_line(&dto, &[], dec!(5000), 3, None).is_err());
     }
 }

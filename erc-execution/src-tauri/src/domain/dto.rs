@@ -6,8 +6,8 @@
 //! `ExecutionProjectSummaryDto` further with `actuals`/`warnings` per
 //! `docs/executer/execution-architecture.md` §11.
 
-use super::enums::{AmendmentStatus, AmendmentType, MilestoneStatus, WpStatus};
-use erc_core::domain::dto::BudgetSummaryDto;
+use super::enums::{AmendmentStatus, AmendmentType, EntryStatus, MilestoneStatus, WpStatus};
+use erc_core::domain::dto::{BudgetSummaryDto, CfsStatus};
 use erc_core::domain::entities::RoleType;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -43,11 +43,44 @@ pub struct ExecutionProjectSummaryDto {
     pub planned: BudgetSummaryDto,
     pub current_project_month: u32,
     pub personnel_roles: Vec<PersonnelRoleSummaryDto>,
+    pub planned_trips: Vec<PlannedTripSummaryDto>,
+    pub planned_equipment: Vec<PlannedEquipmentSummaryDto>,
+    pub planned_other_costs: Vec<PlannedOtherCostSummaryDto>,
     pub persons: Vec<PersonDetailDto>,
     pub person_months: Vec<PersonMonthDetailDto>,
     pub work_packages: Vec<WorkPackageExecutionDetailDto>,
     pub milestones: Vec<MilestoneDetailDto>,
     pub amendments: Vec<AmendmentDetailDto>,
+    pub actuals: ActualFinancialsDto,
+    pub trip_executions: Vec<TripExecutionDetailDto>,
+    pub equipment_procurements: Vec<EquipmentProcurementDetailDto>,
+    pub actual_cost_entries: Vec<ActualCostEntryDetailDto>,
+    pub subcontracting_lines: Vec<SubcontractingLineDetailDto>,
+}
+
+/// UI-convenience projections of read-only Budget App entities, just enough
+/// for the Execution App's "link to planned item" dropdowns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlannedTripSummaryDto {
+    pub id: Uuid,
+    pub name: String,
+    pub number_of_instances: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlannedEquipmentSummaryDto {
+    pub id: Uuid,
+    pub name: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub planned_cost_eur: Decimal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlannedOtherCostSummaryDto {
+    pub id: Uuid,
+    pub name: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub amount_eur: Decimal,
 }
 
 // ─── Personnel & Person-Month Tracking (M-03) ─────────────────────────────────
@@ -186,4 +219,161 @@ pub struct AmendmentDetailDto {
     pub financial_impact_eur: Option<Decimal>,
     pub affected_work_package_ids: Vec<u8>,
     pub notes: Option<String>,
+}
+
+// ─── M-08: Travel Tracking ──────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TripExecutionInputDto {
+    pub trip_id: Uuid,
+    pub instance_number: u32,
+    pub traveller_person_id: Uuid,
+    pub actual_travel_date: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub actual_cost_eur: Decimal,
+    pub status: EntryStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TripExecutionDetailDto {
+    pub id: Uuid,
+    pub trip_id: Uuid,
+    pub trip_name: String,
+    pub instance_number: u32,
+    pub traveller_person_id: Uuid,
+    pub traveller_name: String,
+    pub actual_travel_date: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub actual_cost_eur: Decimal,
+    pub status: EntryStatus,
+    /// The per-instance planned cost (trip's total planned cost ÷ instances),
+    /// used for BR-TR-04's >20% overspend check.
+    #[serde(with = "rust_decimal::serde::str")]
+    pub planned_cost_per_instance_eur: Decimal,
+    /// BR-TR-04: `actual_cost_eur > planned_cost_per_instance_eur × 1.20`.
+    pub overspend_warning: bool,
+}
+
+// ─── M-09: Equipment Tracking ───────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquipmentProcurementInputDto {
+    pub equipment_item_id: Uuid,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub actual_purchase_cost_eur: Decimal,
+    pub purchase_date: String,
+    pub delivery_confirmed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquipmentProcurementDetailDto {
+    pub id: Uuid,
+    pub equipment_item_id: Uuid,
+    pub equipment_item_name: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub actual_purchase_cost_eur: Decimal,
+    pub purchase_date: String,
+    pub delivery_confirmed: bool,
+    /// BR-EQ-01: CALC-05 recomputed with the actual purchase cost. `None`
+    /// until delivery is confirmed (BR-EQ-04).
+    #[serde(default, with = "rust_decimal::serde::str_option")]
+    pub actual_eligible_depreciation_eur: Option<Decimal>,
+    /// BR-EQ-02: `actual_purchase_cost_eur > planned_cost_eur × 1.10`.
+    pub overspend_warning: bool,
+}
+
+// ─── M-10: Other Costs Tracking ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActualCostEntryInputDto {
+    pub linked_entity_id: Option<Uuid>,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub amount_eur: Decimal,
+    pub description: String,
+    pub incurred_date: String,
+    pub status: EntryStatus,
+    pub justification: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActualCostEntryDetailDto {
+    pub id: Uuid,
+    pub linked_entity_id: Option<Uuid>,
+    pub linked_entity_name: Option<String>,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub amount_eur: Decimal,
+    pub description: String,
+    pub incurred_date: String,
+    pub status: EntryStatus,
+    pub justification: Option<String>,
+    /// BR-OC-02: this item's approved actual total (across all its entries)
+    /// exceeds its planned amount × 1.10. `false` for unbudgeted entries.
+    pub overspend_warning: bool,
+}
+
+// ─── M-11: Subcontracting Tracking ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubcontractingLineInputDto {
+    pub vendor: String,
+    pub contract_reference: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub amount_eur: Decimal,
+    pub work_package_id: u8,
+    pub status: EntryStatus,
+    pub vendor_is_host_institution: bool,
+    pub payment_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubcontractingLineDetailDto {
+    pub id: Uuid,
+    pub vendor: String,
+    pub contract_reference: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub amount_eur: Decimal,
+    pub work_package_id: u8,
+    pub status: EntryStatus,
+    pub vendor_is_host_institution: bool,
+    pub payment_date: Option<String>,
+    /// BR-SC-03 advisory: `amount_eur > €200,000`.
+    pub competitive_tender_warning: bool,
+    /// BR-SC-04 advisory: `vendor_is_host_institution`.
+    pub host_institution_warning: bool,
+}
+
+// ─── M-07: Financial Reporting (Planned vs. Actual) ─────────────────────────────
+
+/// The actuals-side counterpart to `BudgetSummaryDto`, reusing the same
+/// erc-core aggregation functions (`calculate_indirect_costs`,
+/// `calculate_total_direct_costs`, `calculate_total_eligible_costs`,
+/// `calculate_requested_contribution`, `check_cfs_threshold`) with actual
+/// instead of planned category totals — see `engines::financial_engine`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActualFinancialsDto {
+    #[serde(with = "rust_decimal::serde::str")]
+    pub a_actual: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub b_actual: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub c1_actual: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub c2_actual: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub c3_actual: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub e_actual: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub total_direct_actual: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub total_eligible_actual: Decimal,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub requested_eu_contribution_actual: Decimal,
+    pub cfs_status_actual: CfsStatus,
+    /// BR-FIN-04: actual exceeds planned by more than 15%, per category.
+    pub category_a_overrun: bool,
+    pub category_b_overrun: bool,
+    pub category_c1_overrun: bool,
+    pub category_c2_overrun: bool,
+    pub category_c3_overrun: bool,
 }

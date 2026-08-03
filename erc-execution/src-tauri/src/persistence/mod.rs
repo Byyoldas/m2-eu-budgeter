@@ -253,6 +253,59 @@ mod tests {
     }
 
     #[test]
+    fn test_save_and_load_roundtrip_preserves_e3_entities() {
+        use crate::domain::enums::EntryStatus;
+        use crate::domain::execution_entities::{
+            ActualCostEntry, EquipmentProcurement, SubcontractingLine, TripExecution,
+        };
+
+        let project = make_project();
+        let mut exec = ExecutionData::default();
+        exec.trip_executions.push(TripExecution {
+            id: uuid::Uuid::new_v4(),
+            trip_id: uuid::Uuid::new_v4(),
+            instance_number: 1,
+            traveller_person_id: uuid::Uuid::new_v4(),
+            actual_travel_date: "2026-03-01".to_string(),
+            actual_cost_eur: dec!(600),
+            status: EntryStatus::Approved,
+        });
+        exec.equipment_procurements.push(EquipmentProcurement {
+            id: uuid::Uuid::new_v4(),
+            equipment_item_id: uuid::Uuid::new_v4(),
+            actual_purchase_cost_eur: dec!(2000),
+            purchase_date: "2026-02-01".to_string(),
+            delivery_confirmed: true,
+        });
+        exec.actual_cost_entries.push(ActualCostEntry {
+            id: uuid::Uuid::new_v4(),
+            linked_entity_id: None,
+            amount_eur: dec!(300),
+            description: "Open-access fee".to_string(),
+            incurred_date: "2026-02-15".to_string(),
+            status: EntryStatus::Approved,
+            justification: Some("Unplanned publication.".to_string()),
+        });
+        exec.subcontracting_lines.push(SubcontractingLine {
+            id: uuid::Uuid::new_v4(),
+            vendor: "Acme Labs".to_string(),
+            contract_reference: "CTR-001".to_string(),
+            amount_eur: dec!(5000),
+            work_package_id: 1,
+            status: EntryStatus::Approved,
+            vendor_is_host_institution: false,
+            payment_date: Some("2026-03-01".to_string()),
+        });
+
+        let path = temp_path("e3-entities-roundtrip");
+        save_execution(&project, &exec, &path).unwrap();
+        let (_, reloaded_exec) = load_execution(&path).unwrap();
+        std::fs::remove_file(&path).ok();
+
+        assert_eq!(exec, reloaded_exec);
+    }
+
+    #[test]
     fn test_save_writes_format_version_1_1() {
         let project = make_project();
         let exec = ExecutionData::default();

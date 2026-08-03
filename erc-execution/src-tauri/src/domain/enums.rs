@@ -48,3 +48,15 @@ pub enum AmendmentStatus {
     Approved,
     Rejected,
 }
+
+/// Shared approval-state enum for Sprint E3's actual-cost tracking entities
+/// (`TripExecution`, `EquipmentProcurement`, `ActualCostEntry`,
+/// `SubcontractingLine`). Only `Approved` entries count toward actuals
+/// (BR-TR-05, BR-EQ-04's `delivery_confirmed` plays the equivalent role for
+/// equipment, BR-FIN-01/02).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EntryStatus {
+    Pending,
+    Approved,
+    Rejected,
+}

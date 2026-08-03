@@ -4,11 +4,14 @@
 //! first (see `docs/executer/execution-requirements.md` M-02).
 
 use crate::domain::dto::{
-    AmendmentDetailDto, ExecutionProjectSummaryDto, MilestoneDetailDto, PersonDetailDto,
-    PersonMonthDetailDto, PersonnelRoleSummaryDto, ProjectInfoDto, WorkPackageExecutionDetailDto,
+    ActualCostEntryDetailDto, AmendmentDetailDto, EquipmentProcurementDetailDto,
+    ExecutionProjectSummaryDto, MilestoneDetailDto, PersonDetailDto, PersonMonthDetailDto,
+    PersonnelRoleSummaryDto, PlannedEquipmentSummaryDto, PlannedOtherCostSummaryDto,
+    PlannedTripSummaryDto, ProjectInfoDto, SubcontractingLineDetailDto, TripExecutionDetailDto,
+    WorkPackageExecutionDetailDto,
 };
 use crate::domain::execution_entities::ExecutionData;
-use crate::engines::progress_engine;
+use crate::engines::{financial_engine, progress_engine};
 use crate::error::AppError;
 use crate::persistence;
 use crate::AppState;
@@ -19,6 +22,14 @@ use tauri::State;
 
 /// BR-WP-03's overspend tolerance multiplier (1.05 = 5%).
 const WP_OVERSPEND_MULTIPLIER: Decimal = Decimal::from_parts(105, 0, 0, false, 2);
+/// BR-TR-04's overspend tolerance multiplier (1.20 = 20%).
+const TRIP_OVERSPEND_MULTIPLIER: Decimal = Decimal::from_parts(120, 0, 0, false, 2);
+/// BR-EQ-02's overspend tolerance multiplier (1.10 = 10%).
+const EQUIPMENT_OVERSPEND_MULTIPLIER: Decimal = Decimal::from_parts(110, 0, 0, false, 2);
+/// BR-OC-02's overspend tolerance multiplier (1.10 = 10%).
+const OTHER_COST_OVERSPEND_MULTIPLIER: Decimal = Decimal::from_parts(110, 0, 0, false, 2);
+/// BR-SC-03's competitive-tendering advisory threshold (€200,000).
+const SUBCONTRACTING_TENDER_THRESHOLD_EUR: Decimal = Decimal::from_parts(200_000, 0, 0, false, 0);
 
 pub(crate) fn build_summary(
     project: &Project,
@@ -187,6 +198,161 @@ pub(crate) fn build_summary(
         })
         .collect();
 
+    let planned_trips: Vec<PlannedTripSummaryDto> = project
+        .trips
+        .iter()
+        .map(|t| PlannedTripSummaryDto {
+            id: t.id,
+            name: t.name.clone(),
+            number_of_instances: t.number_of_instances,
+        })
+        .collect();
+
+    let planned_equipment: Vec<PlannedEquipmentSummaryDto> = project
+        .equipment_items
+        .iter()
+        .map(|e| PlannedEquipmentSummaryDto {
+            id: e.id,
+            name: e.name.clone(),
+            planned_cost_eur: e.purchase_cost_eur,
+        })
+        .collect();
+
+    let planned_other_costs: Vec<PlannedOtherCostSummaryDto> = project
+        .other_cost_items
+        .iter()
+        .map(|o| PlannedOtherCostSummaryDto {
+            id: o.id,
+            name: o.name.clone(),
+            amount_eur: o.amount_eur,
+        })
+        .collect();
+
+    let trip_executions: Vec<TripExecutionDetailDto> = exec
+        .trip_executions
+        .iter()
+        .map(|te| {
+            let trip = project.trips.iter().find(|t| t.id == te.trip_id);
+            let planned_cost_per_instance = trip
+                .and_then(|t| {
+                    financial_engine::calculate_planned_trip_cost_per_instance(
+                        t,
+                        &state.rate_data,
+                        &project.config.rate_version_id,
+                    )
+                    .ok()
+                })
+                .unwrap_or(Decimal::ZERO);
+            let traveller_name = exec
+                .persons
+                .iter()
+                .find(|p| p.id == te.traveller_person_id)
+                .map(|p| p.full_name.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+            TripExecutionDetailDto {
+                id: te.id,
+                trip_id: te.trip_id,
+                trip_name: trip
+                    .map(|t| t.name.clone())
+                    .unwrap_or_else(|| "Unknown trip".to_string()),
+                instance_number: te.instance_number,
+                traveller_person_id: te.traveller_person_id,
+                traveller_name,
+                actual_travel_date: te.actual_travel_date.clone(),
+                actual_cost_eur: te.actual_cost_eur,
+                status: te.status,
+                planned_cost_per_instance_eur: planned_cost_per_instance,
+                overspend_warning: planned_cost_per_instance > Decimal::ZERO
+                    && te.actual_cost_eur > planned_cost_per_instance * TRIP_OVERSPEND_MULTIPLIER,
+            }
+        })
+        .collect();
+
+    let equipment_procurements: Vec<EquipmentProcurementDetailDto> = exec
+        .equipment_procurements
+        .iter()
+        .map(|ep| {
+            let item = project
+                .equipment_items
+                .iter()
+                .find(|i| i.id == ep.equipment_item_id);
+            let actual_eligible_depreciation_eur = if ep.delivery_confirmed {
+                item.and_then(|i| {
+                    erc_core::calculation::equipment_depreciation::calculate_depreciation(
+                        ep.actual_purchase_cost_eur,
+                        i.useful_lifetime_months,
+                        i.grant_usage_pct,
+                        i.grant_usage_months,
+                    )
+                    .ok()
+                })
+                .map(|r| r.eligible_depreciation_eur)
+            } else {
+                None
+            };
+            let overspend_warning = item.is_some_and(|i| {
+                ep.actual_purchase_cost_eur > i.purchase_cost_eur * EQUIPMENT_OVERSPEND_MULTIPLIER
+            });
+            EquipmentProcurementDetailDto {
+                id: ep.id,
+                equipment_item_id: ep.equipment_item_id,
+                equipment_item_name: item
+                    .map(|i| i.name.clone())
+                    .unwrap_or_else(|| "Unknown item".to_string()),
+                actual_purchase_cost_eur: ep.actual_purchase_cost_eur,
+                purchase_date: ep.purchase_date.clone(),
+                delivery_confirmed: ep.delivery_confirmed,
+                actual_eligible_depreciation_eur,
+                overspend_warning,
+            }
+        })
+        .collect();
+
+    let actual_cost_entries: Vec<ActualCostEntryDetailDto> = exec
+        .actual_cost_entries
+        .iter()
+        .map(|entry| {
+            let linked_item = entry
+                .linked_entity_id
+                .and_then(|id| project.other_cost_items.iter().find(|i| i.id == id));
+            let overspend_warning = linked_item.is_some_and(|item| {
+                let actual_total =
+                    financial_engine::calculate_other_cost_actual_total(item.id, exec);
+                actual_total > item.amount_eur * OTHER_COST_OVERSPEND_MULTIPLIER
+            });
+            ActualCostEntryDetailDto {
+                id: entry.id,
+                linked_entity_id: entry.linked_entity_id,
+                linked_entity_name: linked_item.map(|i| i.name.clone()),
+                amount_eur: entry.amount_eur,
+                description: entry.description.clone(),
+                incurred_date: entry.incurred_date.clone(),
+                status: entry.status,
+                justification: entry.justification.clone(),
+                overspend_warning,
+            }
+        })
+        .collect();
+
+    let subcontracting_lines: Vec<SubcontractingLineDetailDto> = exec
+        .subcontracting_lines
+        .iter()
+        .map(|line| SubcontractingLineDetailDto {
+            id: line.id,
+            vendor: line.vendor.clone(),
+            contract_reference: line.contract_reference.clone(),
+            amount_eur: line.amount_eur,
+            work_package_id: line.work_package_id,
+            status: line.status,
+            vendor_is_host_institution: line.vendor_is_host_institution,
+            payment_date: line.payment_date.clone(),
+            competitive_tender_warning: line.amount_eur > SUBCONTRACTING_TENDER_THRESHOLD_EUR,
+            host_institution_warning: line.vendor_is_host_institution,
+        })
+        .collect();
+
+    let actuals = financial_engine::calculate_actuals(project, exec, &planned)?;
+
     Ok(ExecutionProjectSummaryDto {
         project_info: ProjectInfoDto {
             project_title: project.config.project_title.clone(),
@@ -198,11 +364,19 @@ pub(crate) fn build_summary(
         planned,
         current_project_month,
         personnel_roles,
+        planned_trips,
+        planned_equipment,
+        planned_other_costs,
         persons,
         person_months,
         work_packages,
         milestones,
         amendments,
+        actuals,
+        trip_executions,
+        equipment_procurements,
+        actual_cost_entries,
+        subcontracting_lines,
     })
 }
 

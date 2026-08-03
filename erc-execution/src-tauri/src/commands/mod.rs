@@ -1,6 +1,10 @@
 pub mod amendments;
+pub mod equipment;
 pub mod milestones;
+pub mod other_costs;
 pub mod person_months;
 pub mod persons;
 pub mod project;
+pub mod subcontracting;
+pub mod travel;
 pub mod work_packages;
