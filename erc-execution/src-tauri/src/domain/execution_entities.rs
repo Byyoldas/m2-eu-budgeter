@@ -4,13 +4,17 @@
 //!
 //! Sprint E2 scope note: `PersonMonthRecord` tracks by calendar `project_month`
 //! rather than by "reporting period" (`docs/executer/execution-requirements.md`
-//! BR-PM-02/03/05 are written in terms of periods) because Reporting Period
-//! Management (M-14) has not been built yet. The per-month tolerance checks in
-//! `validation::validate_person_month_record` apply the same BR-PM-03/04/05
-//! numeric rules per calendar month instead; this can be re-expressed in
-//! terms of periods once M-14 exists without changing the stored data shape.
+//! BR-PM-02/03/05 are written in terms of periods). Now that Sprint E4 builds
+//! Reporting Period Management (M-14), the underlying period entity exists,
+//! but `PersonMonthRecord` itself is left untouched — re-expressing BR-PM-05's
+//! tolerance check per-period instead of per-month would require rewriting
+//! `validate_person_month_record`'s call sites across the Personnel screen and
+//! isn't part of M-05/M-14's own scope; still per-month for now.
 
-use super::enums::{AmendmentStatus, AmendmentType, EntryStatus, MilestoneStatus};
+use super::enums::{
+    AmendmentStatus, AmendmentType, DeliverableStatus, DeliverableType, DisseminationLevel,
+    EntryStatus, MilestoneStatus, ReportingPeriodStatus,
+};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -39,6 +43,10 @@ pub struct ExecutionData {
     pub actual_cost_entries: Vec<ActualCostEntry>,
     #[serde(default)]
     pub subcontracting_lines: Vec<SubcontractingLine>,
+    #[serde(default)]
+    pub deliverables: Vec<Deliverable>,
+    #[serde(default)]
+    pub reporting_periods: Vec<ReportingPeriod>,
 }
 
 impl Default for ExecutionData {
@@ -54,6 +62,8 @@ impl Default for ExecutionData {
             equipment_procurements: Vec::new(),
             actual_cost_entries: Vec::new(),
             subcontracting_lines: Vec::new(),
+            deliverables: Vec::new(),
+            reporting_periods: Vec::new(),
         }
     }
 }
@@ -112,6 +122,12 @@ pub struct Milestone {
     pub planned_month: u32,
     pub status: MilestoneStatus,
     pub actual_completion_month: Option<u32>,
+    /// References `Deliverable.id` (M-05, added Sprint E4). BR-MS-02: a
+    /// milestone can only be marked `Completed` once every linked
+    /// deliverable is `Accepted` — see
+    /// `progress_engine::validate_milestone_completion`.
+    #[serde(default)]
+    pub linked_deliverable_ids: Vec<Uuid>,
 }
 
 /// A formal Horizon Europe grant amendment (scope, budget, duration, or
@@ -205,6 +221,53 @@ pub struct SubcontractingLine {
     pub payment_date: Option<String>,
 }
 
+/// A project deliverable (M-05). `deliverable_number` follows BR-DEL-02's
+/// `D{wp_id}.{sequence}` format, server-assigned and immutable once created —
+/// see `commands::deliverables::next_deliverable_number`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Deliverable {
+    pub id: Uuid,
+    pub deliverable_number: String,
+    pub title: String,
+    pub deliverable_type: DeliverableType,
+    pub work_package_id: u8,
+    pub planned_month: u32,
+    /// References `erc_core::domain::entities::PersonnelRole.id`.
+    pub responsible_role_id: Uuid,
+    pub dissemination_level: DisseminationLevel,
+    pub status: DeliverableStatus,
+    pub actual_submission_date: Option<String>,
+    /// BR-DEL-03: required when `status` is `Rejected`.
+    pub revision_note: Option<String>,
+    /// BR-DEL-03: required when `status` is `Rejected`.
+    pub revised_planned_month: Option<u32>,
+    /// BR-DEL-04 advisory input, self-declared (the app has no CORDIS API
+    /// integration — see M-05's "Future Extensions").
+    pub cordis_registered: bool,
+    pub notes: Option<String>,
+}
+
+/// A project reporting period (M-14). BR-RP-05's ERC CoG defaults are
+/// pre-populated on project open by
+/// `engines::reporting_period_engine::generate_default_reporting_periods`
+/// when this list is empty.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReportingPeriod {
+    pub id: Uuid,
+    pub period_number: u32,
+    pub start_month: u32,
+    pub end_month: u32,
+    /// `None` until the PI sets a real deadline — same "skip until a
+    /// calendar anchor is known" precedent as BR-PM-06 (see
+    /// `validation::validate_person`), since the auto-populated defaults
+    /// have no deadline computation specified anywhere in the docs.
+    pub submission_deadline: Option<String>,
+    pub technical_report_submitted: bool,
+    pub financial_report_submitted: bool,
+    /// BR-RP-03: can only become `Submitted` once both flags above are set.
+    pub status: ReportingPeriodStatus,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,6 +285,8 @@ mod tests {
         assert!(data.equipment_procurements.is_empty());
         assert!(data.actual_cost_entries.is_empty());
         assert!(data.subcontracting_lines.is_empty());
+        assert!(data.deliverables.is_empty());
+        assert!(data.reporting_periods.is_empty());
     }
 
     #[test]

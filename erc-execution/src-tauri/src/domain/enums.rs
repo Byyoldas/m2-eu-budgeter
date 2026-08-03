@@ -60,3 +60,46 @@ pub enum EntryStatus {
     Approved,
     Rejected,
 }
+
+/// M-05 deliverable type catalogue (`execution-requirements.md` §M-05).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeliverableType {
+    Report,
+    Dataset,
+    Software,
+    Prototype,
+    Dem,
+    Ethics,
+    Other,
+}
+
+/// M-05 dissemination level (`execution-requirements.md` §M-05).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DisseminationLevel {
+    Public,
+    RestrictedToProgramme,
+    Confidential,
+}
+
+/// M-05 status flow: `NotStarted` → `InProgress` → `Submitted` →
+/// `Accepted` | `Rejected` → `Revised` → `Submitted`. Not enforced as a
+/// strict state machine (same looseness as `WpStatus`/`AmendmentStatus`) —
+/// only BR-DEL-03 (`Rejected` requires a revision note) is validated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeliverableStatus {
+    NotStarted,
+    InProgress,
+    Submitted,
+    Accepted,
+    Rejected,
+    Revised,
+}
+
+/// M-14 reporting period status. BR-RP-03: a period cannot move to
+/// `Submitted` unless both report-submission flags are set — see
+/// `validation::validate_reporting_period`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReportingPeriodStatus {
+    Open,
+    Submitted,
+}

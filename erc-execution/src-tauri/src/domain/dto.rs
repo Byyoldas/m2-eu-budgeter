@@ -6,7 +6,10 @@
 //! `ExecutionProjectSummaryDto` further with `actuals`/`warnings` per
 //! `docs/executer/execution-architecture.md` §11.
 
-use super::enums::{AmendmentStatus, AmendmentType, EntryStatus, MilestoneStatus, WpStatus};
+use super::enums::{
+    AmendmentStatus, AmendmentType, DeliverableStatus, DeliverableType, DisseminationLevel,
+    EntryStatus, MilestoneStatus, ReportingPeriodStatus, WpStatus,
+};
 use erc_core::domain::dto::{BudgetSummaryDto, CfsStatus};
 use erc_core::domain::entities::RoleType;
 use rust_decimal::Decimal;
@@ -56,6 +59,9 @@ pub struct ExecutionProjectSummaryDto {
     pub equipment_procurements: Vec<EquipmentProcurementDetailDto>,
     pub actual_cost_entries: Vec<ActualCostEntryDetailDto>,
     pub subcontracting_lines: Vec<SubcontractingLineDetailDto>,
+    pub deliverables: Vec<DeliverableDetailDto>,
+    pub reporting_periods: Vec<ReportingPeriodDetailDto>,
+    pub reporting_period_coverage: ReportingPeriodCoverageDto,
 }
 
 /// UI-convenience projections of read-only Budget App entities, just enough
@@ -172,6 +178,9 @@ pub struct MilestoneInputDto {
     pub planned_month: u32,
     pub status: MilestoneStatus,
     pub actual_completion_month: Option<u32>,
+    /// References `Deliverable.id` (M-05). BR-MS-02.
+    #[serde(default)]
+    pub linked_deliverable_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,6 +195,7 @@ pub struct MilestoneDetailDto {
     /// `progress_engine::derive_milestone_status`. Use this for display.
     pub effective_status: MilestoneStatus,
     pub actual_completion_month: Option<u32>,
+    pub linked_deliverable_ids: Vec<Uuid>,
 }
 
 // ─── Amendment Management (from-scratch design) ───────────────────────────────
@@ -376,4 +386,87 @@ pub struct ActualFinancialsDto {
     pub category_c1_overrun: bool,
     pub category_c2_overrun: bool,
     pub category_c3_overrun: bool,
+}
+
+// ─── M-05: Deliverable Tracking ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeliverableInputDto {
+    pub title: String,
+    pub deliverable_type: DeliverableType,
+    pub work_package_id: u8,
+    pub planned_month: u32,
+    pub responsible_role_id: Uuid,
+    pub dissemination_level: DisseminationLevel,
+    pub status: DeliverableStatus,
+    pub actual_submission_date: Option<String>,
+    pub revision_note: Option<String>,
+    pub revised_planned_month: Option<u32>,
+    pub cordis_registered: bool,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeliverableDetailDto {
+    pub id: Uuid,
+    pub deliverable_number: String,
+    pub title: String,
+    pub deliverable_type: DeliverableType,
+    pub work_package_id: u8,
+    pub planned_month: u32,
+    pub responsible_role_id: Uuid,
+    pub responsible_role_label: String,
+    pub dissemination_level: DisseminationLevel,
+    pub status: DeliverableStatus,
+    pub actual_submission_date: Option<String>,
+    pub revision_note: Option<String>,
+    pub revised_planned_month: Option<u32>,
+    pub cordis_registered: bool,
+    pub notes: Option<String>,
+    /// BR-DEL-01: derived, never stored.
+    pub is_overdue: bool,
+    /// BR-DEL-04 advisory: `Public` dissemination not yet registered in CORDIS.
+    pub cordis_warning: bool,
+    /// BR-DEL-05: the reporting period whose month range contains this
+    /// deliverable's effective planned month (`revised_planned_month` if
+    /// set, else `planned_month`), if any periods exist yet.
+    pub reporting_period_number: Option<u32>,
+}
+
+// ─── M-14: Reporting Period Management ─────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportingPeriodInputDto {
+    pub start_month: u32,
+    pub end_month: u32,
+    pub submission_deadline: Option<String>,
+    pub technical_report_submitted: bool,
+    pub financial_report_submitted: bool,
+    pub status: ReportingPeriodStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportingPeriodDetailDto {
+    pub id: Uuid,
+    pub period_number: u32,
+    pub start_month: u32,
+    pub end_month: u32,
+    pub submission_deadline: Option<String>,
+    pub technical_report_submitted: bool,
+    pub financial_report_submitted: bool,
+    pub status: ReportingPeriodStatus,
+    /// Number of deliverables whose effective planned month falls in this
+    /// period (BR-DEL-05), and how many of those are already Submitted or
+    /// beyond.
+    pub deliverables_due: u32,
+    pub deliverables_submitted: u32,
+}
+
+/// BR-RP-01/02 advisory coverage check across the whole `reporting_periods`
+/// list — see `validation::validate_reporting_period`'s doc comment for why
+/// this isn't a hard-blocking validator.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportingPeriodCoverageDto {
+    pub gaps_detected: bool,
+    pub final_period_covers_project_end: bool,
 }

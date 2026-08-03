@@ -24,6 +24,7 @@ const emptyMilestone: MilestoneInputDto = {
   planned_month: 1,
   status: 'NotStarted',
   actual_completion_month: null,
+  linked_deliverable_ids: [],
 };
 
 export function Milestones() {

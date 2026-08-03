@@ -7,7 +7,7 @@ use crate::domain::execution_entities::Milestone;
 use crate::engines::progress_engine::derive_current_project_month;
 use crate::error::AppError;
 use crate::persistence;
-use crate::validation::validate_milestone;
+use crate::validation::{validate_milestone, validate_milestone_completion};
 use crate::AppState;
 use tauri::State;
 use uuid::Uuid;
@@ -20,11 +20,19 @@ pub fn add_milestone(
     let project_lock = state.project.lock().unwrap();
     let project = project_lock.as_ref().ok_or(AppError::NoProject)?;
 
-    let max_month = project.config.duration_years as u32 * 12;
-    validate_milestone(&input, project.config.work_package_count, max_month)?;
-
     let mut exec_lock = state.execution_data.lock().unwrap();
     let exec = exec_lock.as_mut().ok_or(AppError::NoProject)?;
+
+    let max_month = project.config.duration_years as u32 * 12;
+    validate_milestone(
+        &input,
+        project.config.work_package_count,
+        max_month,
+        &exec.deliverables,
+    )?;
+    if input.status == MilestoneStatus::Completed {
+        validate_milestone_completion(&input.linked_deliverable_ids, &exec.deliverables)?;
+    }
 
     exec.milestones.push(Milestone {
         id: Uuid::new_v4(),
@@ -33,6 +41,7 @@ pub fn add_milestone(
         planned_month: input.planned_month,
         status: input.status,
         actual_completion_month: input.actual_completion_month,
+        linked_deliverable_ids: input.linked_deliverable_ids,
     });
 
     let summary = build_summary(project, exec, &state)?;
@@ -51,11 +60,19 @@ pub fn update_milestone(
     let project_lock = state.project.lock().unwrap();
     let project = project_lock.as_ref().ok_or(AppError::NoProject)?;
 
-    let max_month = project.config.duration_years as u32 * 12;
-    validate_milestone(&input, project.config.work_package_count, max_month)?;
-
     let mut exec_lock = state.execution_data.lock().unwrap();
     let exec = exec_lock.as_mut().ok_or(AppError::NoProject)?;
+
+    let max_month = project.config.duration_years as u32 * 12;
+    validate_milestone(
+        &input,
+        project.config.work_package_count,
+        max_month,
+        &exec.deliverables,
+    )?;
+    if input.status == MilestoneStatus::Completed {
+        validate_milestone_completion(&input.linked_deliverable_ids, &exec.deliverables)?;
+    }
 
     let milestone = exec
         .milestones
@@ -67,6 +84,7 @@ pub fn update_milestone(
     milestone.planned_month = input.planned_month;
     milestone.status = input.status;
     milestone.actual_completion_month = input.actual_completion_month;
+    milestone.linked_deliverable_ids = input.linked_deliverable_ids;
 
     let summary = build_summary(project, exec, &state)?;
     if let Some(path) = state.project_path.lock().unwrap().as_deref() {
@@ -76,8 +94,8 @@ pub fn update_milestone(
 }
 
 /// Convenience command: marks a milestone `Completed` at the current project
-/// month in one call (BR-MS-02's deliverable-acceptance gate is deferred —
-/// Deliverable Tracking, M-05, doesn't exist yet).
+/// month in one call. BR-MS-02: blocked unless every linked deliverable is
+/// `Accepted`.
 #[tauri::command]
 pub fn complete_milestone(
     state: State<'_, AppState>,
@@ -89,6 +107,15 @@ pub fn complete_milestone(
 
     let mut exec_lock = state.execution_data.lock().unwrap();
     let exec = exec_lock.as_mut().ok_or(AppError::NoProject)?;
+
+    let linked_deliverable_ids = exec
+        .milestones
+        .iter()
+        .find(|m| m.id == id)
+        .ok_or_else(|| AppError::NotFound(format!("Milestone '{id}' not found.")))?
+        .linked_deliverable_ids
+        .clone();
+    validate_milestone_completion(&linked_deliverable_ids, &exec.deliverables)?;
 
     let milestone = exec
         .milestones

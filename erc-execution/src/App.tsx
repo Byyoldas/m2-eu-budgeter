@@ -13,11 +13,13 @@ import { Dashboard } from './screens/Dashboard';
 import { Personnel } from './screens/Personnel';
 import { WorkPackages } from './screens/WorkPackages';
 import { Milestones } from './screens/Milestones';
+import { Deliverables } from './screens/Deliverables';
 import { Amendments } from './screens/Amendments';
 import { Travel } from './screens/Travel';
 import { Equipment } from './screens/Equipment';
 import { OtherCosts } from './screens/OtherCosts';
 import { Subcontracting } from './screens/Subcontracting';
+import { ReportingPeriods } from './screens/ReportingPeriods';
 import './App.css';
 
 export function App() {
@@ -37,6 +39,8 @@ export function App() {
         return <WorkPackages />;
       case 'milestones':
         return <Milestones />;
+      case 'deliverables':
+        return <Deliverables />;
       case 'amendments':
         return <Amendments />;
       case 'travel':
@@ -47,6 +51,8 @@ export function App() {
         return <OtherCosts />;
       case 'subcontracting':
         return <Subcontracting />;
+      case 'reporting-periods':
+        return <ReportingPeriods />;
       case 'dashboard':
       default:
         return <Dashboard />;

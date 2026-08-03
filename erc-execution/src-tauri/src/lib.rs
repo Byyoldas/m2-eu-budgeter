@@ -84,6 +84,14 @@ pub fn run() {
             commands::subcontracting::add_subcontracting_line,
             commands::subcontracting::update_subcontracting_line,
             commands::subcontracting::delete_subcontracting_line,
+            // M-05: Deliverable Tracking
+            commands::deliverables::add_deliverable,
+            commands::deliverables::update_deliverable,
+            commands::deliverables::delete_deliverable,
+            // M-14: Reporting Period Management
+            commands::reporting_periods::add_reporting_period,
+            commands::reporting_periods::update_reporting_period,
+            commands::reporting_periods::delete_reporting_period,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

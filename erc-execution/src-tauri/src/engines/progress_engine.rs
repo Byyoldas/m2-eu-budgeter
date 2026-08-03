@@ -2,16 +2,17 @@
 //! status (M-06, BR-MS-01) derivation, plus the WP "actual cost" rollup this
 //! sprint can support (personnel only — see `calculate_wp_actual_personnel_eur`).
 //!
-//! Sprint E2 scope notes:
-//! - BR-WP-04's `Completed` case drops the "AND all deliverables Accepted"
-//!   clause, and `AtRisk` only considers milestones — Deliverable Tracking
-//!   (M-05) doesn't exist yet. Both tighten once it does.
-//! - `current_project_month` auto-detects from `ProjectConfig.call_opening_date`
-//!   (falling back to month 1 when unset) — a reasonable default for the
-//!   architecture doc's own open question on this (§17, Q2).
+//! Sprint E2 scope note (resolved in Sprint E4 once M-05 existed): BR-WP-04's
+//! `Completed` case now includes the "AND all deliverables Accepted" clause,
+//! and `AtRisk` considers both milestones and overdue/rejected deliverables
+//! — see `derive_wp_status`.
+//!
+//! `current_project_month` auto-detects from `ProjectConfig.call_opening_date`
+//! (falling back to month 1 when unset) — a reasonable default for the
+//! architecture doc's own open question on this (§17, Q2).
 
-use crate::domain::enums::{MilestoneStatus, WpStatus};
-use crate::domain::execution_entities::{Milestone, Person, PersonMonthRecord};
+use crate::domain::enums::{DeliverableStatus, MilestoneStatus, WpStatus};
+use crate::domain::execution_entities::{Deliverable, Milestone, Person, PersonMonthRecord};
 use chrono::Datelike;
 use erc_core::calculation::personnel_cost::allocate_personnel_cost_by_wp;
 use erc_core::calculation::salary_projection::{convert_try_to_eur, project_salary_chain};
@@ -54,17 +55,39 @@ pub fn derive_milestone_status(
     }
 }
 
+/// BR-DEL-01: a deliverable is overdue when it hasn't been submitted and its
+/// effective planned month (the BR-DEL-03 `revised_planned_month`, if set)
+/// has already passed.
+pub fn is_deliverable_overdue(deliverable: &Deliverable, current_project_month: u32) -> bool {
+    let effective_planned_month = deliverable
+        .revised_planned_month
+        .unwrap_or(deliverable.planned_month);
+    deliverable.actual_submission_date.is_none() && effective_planned_month < current_project_month
+}
+
+/// BR-WP-04's "any milestone or deliverable is Delayed or AtRisk" clause —
+/// `DeliverableStatus` has no `AtRisk`/`Delayed` values of its own, so an
+/// overdue (BR-DEL-01) or `Rejected` deliverable stands in for that state.
+fn is_deliverable_at_risk(deliverable: &Deliverable, current_project_month: u32) -> bool {
+    deliverable.status == DeliverableStatus::Rejected
+        || is_deliverable_overdue(deliverable, current_project_month)
+}
+
 /// BR-WP-04.
 pub fn derive_wp_status(
     wp_start_month: u32,
     wp_end_month: u32,
     wp_milestones: &[&Milestone],
+    wp_deliverables: &[&Deliverable],
     current_project_month: u32,
 ) -> WpStatus {
     if current_project_month < wp_start_month {
         return WpStatus::NotStarted;
     }
-    if current_project_month > wp_end_month {
+    let all_deliverables_accepted = wp_deliverables
+        .iter()
+        .all(|d| d.status == DeliverableStatus::Accepted);
+    if current_project_month > wp_end_month && all_deliverables_accepted {
         return WpStatus::Completed;
     }
     let at_risk = wp_milestones.iter().any(|m| {
@@ -72,7 +95,9 @@ pub fn derive_wp_status(
             derive_milestone_status(m, current_project_month),
             MilestoneStatus::AtRisk | MilestoneStatus::Delayed
         )
-    });
+    }) || wp_deliverables
+        .iter()
+        .any(|d| is_deliverable_at_risk(d, current_project_month));
     if at_risk {
         WpStatus::AtRisk
     } else {
@@ -257,6 +282,26 @@ mod tests {
             planned_month,
             status,
             actual_completion_month: None,
+            linked_deliverable_ids: vec![],
+        }
+    }
+
+    fn make_deliverable(status: DeliverableStatus, planned_month: u32) -> Deliverable {
+        Deliverable {
+            id: Uuid::new_v4(),
+            deliverable_number: "D1.1".to_string(),
+            title: "D".to_string(),
+            deliverable_type: crate::domain::enums::DeliverableType::Report,
+            work_package_id: 1,
+            planned_month,
+            responsible_role_id: Uuid::new_v4(),
+            dissemination_level: crate::domain::enums::DisseminationLevel::Public,
+            status,
+            actual_submission_date: None,
+            revision_note: None,
+            revised_planned_month: None,
+            cordis_registered: false,
+            notes: None,
         }
     }
 
@@ -282,30 +327,88 @@ mod tests {
 
     #[test]
     fn test_wp_status_not_started() {
-        assert_eq!(derive_wp_status(6, 18, &[], 3), WpStatus::NotStarted);
+        assert_eq!(derive_wp_status(6, 18, &[], &[], 3), WpStatus::NotStarted);
     }
 
     #[test]
-    fn test_wp_status_completed_after_end_month() {
-        assert_eq!(derive_wp_status(1, 18, &[], 24), WpStatus::Completed);
+    fn test_wp_status_completed_after_end_month_with_no_deliverables() {
+        assert_eq!(derive_wp_status(1, 18, &[], &[], 24), WpStatus::Completed);
+    }
+
+    #[test]
+    fn test_wp_status_completed_after_end_month_with_all_deliverables_accepted() {
+        let d = make_deliverable(DeliverableStatus::Accepted, 10);
+        assert_eq!(derive_wp_status(1, 18, &[], &[&d], 24), WpStatus::Completed);
+    }
+
+    #[test]
+    fn test_wp_status_not_completed_when_a_deliverable_is_unaccepted() {
+        // BR-WP-04: past end month, but a deliverable isn't yet Accepted —
+        // falls through to OnTrack/AtRisk instead of Completed. Submitted
+        // (and not overdue, since it has a submission date) so it doesn't
+        // also trip the AtRisk clause.
+        let mut d = make_deliverable(DeliverableStatus::Submitted, 10);
+        d.actual_submission_date = Some("2026-11-01".to_string());
+        assert_eq!(derive_wp_status(1, 18, &[], &[&d], 24), WpStatus::OnTrack);
     }
 
     #[test]
     fn test_wp_status_on_track_with_no_at_risk_milestones() {
         let m = make_milestone(MilestoneStatus::OnTrack, 10);
-        assert_eq!(derive_wp_status(1, 18, &[&m], 6), WpStatus::OnTrack);
+        assert_eq!(derive_wp_status(1, 18, &[&m], &[], 6), WpStatus::OnTrack);
     }
 
     #[test]
     fn test_wp_status_at_risk_from_overdue_milestone() {
         let m = make_milestone(MilestoneStatus::NotStarted, 3);
-        assert_eq!(derive_wp_status(1, 18, &[&m], 6), WpStatus::AtRisk);
+        assert_eq!(derive_wp_status(1, 18, &[&m], &[], 6), WpStatus::AtRisk);
     }
 
     #[test]
     fn test_wp_status_at_risk_from_delayed_milestone() {
         let m = make_milestone(MilestoneStatus::Delayed, 10);
-        assert_eq!(derive_wp_status(1, 18, &[&m], 6), WpStatus::AtRisk);
+        assert_eq!(derive_wp_status(1, 18, &[&m], &[], 6), WpStatus::AtRisk);
+    }
+
+    #[test]
+    fn test_wp_status_at_risk_from_overdue_deliverable() {
+        let d = make_deliverable(DeliverableStatus::InProgress, 3);
+        assert_eq!(derive_wp_status(1, 18, &[], &[&d], 6), WpStatus::AtRisk);
+    }
+
+    #[test]
+    fn test_wp_status_at_risk_from_rejected_deliverable() {
+        let d = make_deliverable(DeliverableStatus::Rejected, 10);
+        assert_eq!(derive_wp_status(1, 18, &[], &[&d], 6), WpStatus::AtRisk);
+    }
+
+    // ─── is_deliverable_overdue ─────────────────────────────────────────
+
+    #[test]
+    fn test_deliverable_overdue_when_unsubmitted_past_planned_month() {
+        let d = make_deliverable(DeliverableStatus::InProgress, 3);
+        assert!(is_deliverable_overdue(&d, 6));
+    }
+
+    #[test]
+    fn test_deliverable_not_overdue_before_planned_month() {
+        let d = make_deliverable(DeliverableStatus::NotStarted, 6);
+        assert!(!is_deliverable_overdue(&d, 3));
+    }
+
+    #[test]
+    fn test_deliverable_not_overdue_once_submitted() {
+        let mut d = make_deliverable(DeliverableStatus::Submitted, 3);
+        d.actual_submission_date = Some("2026-04-01".to_string());
+        assert!(!is_deliverable_overdue(&d, 6));
+    }
+
+    #[test]
+    fn test_deliverable_overdue_uses_revised_planned_month() {
+        let mut d = make_deliverable(DeliverableStatus::Revised, 3);
+        d.revised_planned_month = Some(9);
+        // Original planned month (3) has passed, but the revised one (9) hasn't.
+        assert!(!is_deliverable_overdue(&d, 6));
     }
 
     // ─── calculate_planned_fte_months_for_month ────────────────────────

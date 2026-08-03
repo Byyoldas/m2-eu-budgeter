@@ -119,6 +119,7 @@ export interface MilestoneInputDto {
   planned_month: number;
   status: MilestoneStatus;
   actual_completion_month: number | null;
+  linked_deliverable_ids: string[];
 }
 
 export interface MilestoneDetailDto {
@@ -129,6 +130,7 @@ export interface MilestoneDetailDto {
   status: MilestoneStatus;
   effective_status: MilestoneStatus;
   actual_completion_month: number | null;
+  linked_deliverable_ids: string[];
 }
 
 // ─── Amendment Management (from-scratch design) ───────────────────────────────
@@ -281,6 +283,94 @@ export interface ActualFinancialsDto {
   category_c3_overrun: boolean;
 }
 
+// ─── M-05: Deliverable Tracking ─────────────────────────────────────────────────
+
+export type DeliverableType =
+  | 'Report'
+  | 'Dataset'
+  | 'Software'
+  | 'Prototype'
+  | 'Dem'
+  | 'Ethics'
+  | 'Other';
+
+export type DisseminationLevel = 'Public' | 'RestrictedToProgramme' | 'Confidential';
+
+export type DeliverableStatus =
+  | 'NotStarted'
+  | 'InProgress'
+  | 'Submitted'
+  | 'Accepted'
+  | 'Rejected'
+  | 'Revised';
+
+export interface DeliverableInputDto {
+  title: string;
+  deliverable_type: DeliverableType;
+  work_package_id: number;
+  planned_month: number;
+  responsible_role_id: string;
+  dissemination_level: DisseminationLevel;
+  status: DeliverableStatus;
+  actual_submission_date: string | null;
+  revision_note: string | null;
+  revised_planned_month: number | null;
+  cordis_registered: boolean;
+  notes: string | null;
+}
+
+export interface DeliverableDetailDto {
+  id: string;
+  deliverable_number: string;
+  title: string;
+  deliverable_type: DeliverableType;
+  work_package_id: number;
+  planned_month: number;
+  responsible_role_id: string;
+  responsible_role_label: string;
+  dissemination_level: DisseminationLevel;
+  status: DeliverableStatus;
+  actual_submission_date: string | null;
+  revision_note: string | null;
+  revised_planned_month: number | null;
+  cordis_registered: boolean;
+  notes: string | null;
+  is_overdue: boolean;
+  cordis_warning: boolean;
+  reporting_period_number: number | null;
+}
+
+// ─── M-14: Reporting Period Management ──────────────────────────────────────────
+
+export type ReportingPeriodStatus = 'Open' | 'Submitted';
+
+export interface ReportingPeriodInputDto {
+  start_month: number;
+  end_month: number;
+  submission_deadline: string | null;
+  technical_report_submitted: boolean;
+  financial_report_submitted: boolean;
+  status: ReportingPeriodStatus;
+}
+
+export interface ReportingPeriodDetailDto {
+  id: string;
+  period_number: number;
+  start_month: number;
+  end_month: number;
+  submission_deadline: string | null;
+  technical_report_submitted: boolean;
+  financial_report_submitted: boolean;
+  status: ReportingPeriodStatus;
+  deliverables_due: number;
+  deliverables_submitted: number;
+}
+
+export interface ReportingPeriodCoverageDto {
+  gaps_detected: boolean;
+  final_period_covers_project_end: boolean;
+}
+
 export interface ExecutionProjectSummaryDto {
   project_info: ProjectInfoDto;
   planned: BudgetSummaryDto;
@@ -299,6 +389,9 @@ export interface ExecutionProjectSummaryDto {
   equipment_procurements: EquipmentProcurementDetailDto[];
   actual_cost_entries: ActualCostEntryDetailDto[];
   subcontracting_lines: SubcontractingLineDetailDto[];
+  deliverables: DeliverableDetailDto[];
+  reporting_periods: ReportingPeriodDetailDto[];
+  reporting_period_coverage: ReportingPeriodCoverageDto;
 }
 
 export type ExecutionScreen =
@@ -307,8 +400,10 @@ export type ExecutionScreen =
   | 'personnel'
   | 'work-packages'
   | 'milestones'
+  | 'deliverables'
   | 'amendments'
   | 'travel'
   | 'equipment'
   | 'other-costs'
-  | 'subcontracting';
+  | 'subcontracting'
+  | 'reporting-periods';

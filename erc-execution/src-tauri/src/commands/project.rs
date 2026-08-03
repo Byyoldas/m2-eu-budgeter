@@ -4,14 +4,14 @@
 //! first (see `docs/executer/execution-requirements.md` M-02).
 
 use crate::domain::dto::{
-    ActualCostEntryDetailDto, AmendmentDetailDto, EquipmentProcurementDetailDto,
-    ExecutionProjectSummaryDto, MilestoneDetailDto, PersonDetailDto, PersonMonthDetailDto,
-    PersonnelRoleSummaryDto, PlannedEquipmentSummaryDto, PlannedOtherCostSummaryDto,
-    PlannedTripSummaryDto, ProjectInfoDto, SubcontractingLineDetailDto, TripExecutionDetailDto,
-    WorkPackageExecutionDetailDto,
+    ActualCostEntryDetailDto, AmendmentDetailDto, DeliverableDetailDto,
+    EquipmentProcurementDetailDto, ExecutionProjectSummaryDto, MilestoneDetailDto, PersonDetailDto,
+    PersonMonthDetailDto, PersonnelRoleSummaryDto, PlannedEquipmentSummaryDto,
+    PlannedOtherCostSummaryDto, PlannedTripSummaryDto, ProjectInfoDto, ReportingPeriodDetailDto,
+    SubcontractingLineDetailDto, TripExecutionDetailDto, WorkPackageExecutionDetailDto,
 };
 use crate::domain::execution_entities::ExecutionData;
-use crate::engines::{financial_engine, progress_engine};
+use crate::engines::{financial_engine, progress_engine, reporting_period_engine};
 use crate::error::AppError;
 use crate::persistence;
 use crate::AppState;
@@ -132,10 +132,16 @@ pub(crate) fn build_summary(
                 .iter()
                 .filter(|m| m.work_package_id == wp.id)
                 .collect();
+            let wp_deliverables: Vec<&crate::domain::execution_entities::Deliverable> = exec
+                .deliverables
+                .iter()
+                .filter(|d| d.work_package_id == wp.id)
+                .collect();
             let status = progress_engine::derive_wp_status(
                 wp.start_month,
                 wp.end_month,
                 &wp_milestones,
+                &wp_deliverables,
                 current_project_month,
             );
 
@@ -177,6 +183,7 @@ pub(crate) fn build_summary(
             status: m.status,
             effective_status: progress_engine::derive_milestone_status(m, current_project_month),
             actual_completion_month: m.actual_completion_month,
+            linked_deliverable_ids: m.linked_deliverable_ids.clone(),
         })
         .collect();
 
@@ -353,6 +360,80 @@ pub(crate) fn build_summary(
 
     let actuals = financial_engine::calculate_actuals(project, exec, &planned)?;
 
+    let deliverables: Vec<DeliverableDetailDto> = exec
+        .deliverables
+        .iter()
+        .map(|d| {
+            let responsible_role_label = project
+                .personnel_roles
+                .iter()
+                .find(|r| r.id == d.responsible_role_id)
+                .map(|r| r.role_label.clone())
+                .unwrap_or_else(|| "Unknown role".to_string());
+            let effective_planned_month = d.revised_planned_month.unwrap_or(d.planned_month);
+            DeliverableDetailDto {
+                id: d.id,
+                deliverable_number: d.deliverable_number.clone(),
+                title: d.title.clone(),
+                deliverable_type: d.deliverable_type,
+                work_package_id: d.work_package_id,
+                planned_month: d.planned_month,
+                responsible_role_id: d.responsible_role_id,
+                responsible_role_label,
+                dissemination_level: d.dissemination_level,
+                status: d.status,
+                actual_submission_date: d.actual_submission_date.clone(),
+                revision_note: d.revision_note.clone(),
+                revised_planned_month: d.revised_planned_month,
+                cordis_registered: d.cordis_registered,
+                notes: d.notes.clone(),
+                is_overdue: progress_engine::is_deliverable_overdue(d, current_project_month),
+                cordis_warning: d.dissemination_level
+                    == crate::domain::enums::DisseminationLevel::Public
+                    && !d.cordis_registered,
+                reporting_period_number: reporting_period_engine::find_period_for_month(
+                    &exec.reporting_periods,
+                    effective_planned_month,
+                ),
+            }
+        })
+        .collect();
+
+    let reporting_periods: Vec<ReportingPeriodDetailDto> = exec
+        .reporting_periods
+        .iter()
+        .map(|p| {
+            let deliverables_in_period: Vec<&crate::domain::execution_entities::Deliverable> = exec
+                .deliverables
+                .iter()
+                .filter(|d| {
+                    let effective_month = d.revised_planned_month.unwrap_or(d.planned_month);
+                    effective_month >= p.start_month && effective_month <= p.end_month
+                })
+                .collect();
+            let deliverables_submitted = deliverables_in_period
+                .iter()
+                .filter(|d| d.actual_submission_date.is_some())
+                .count() as u32;
+            ReportingPeriodDetailDto {
+                id: p.id,
+                period_number: p.period_number,
+                start_month: p.start_month,
+                end_month: p.end_month,
+                submission_deadline: p.submission_deadline.clone(),
+                technical_report_submitted: p.technical_report_submitted,
+                financial_report_submitted: p.financial_report_submitted,
+                status: p.status,
+                deliverables_due: deliverables_in_period.len() as u32,
+                deliverables_submitted,
+            }
+        })
+        .collect();
+
+    let max_month = project.config.duration_years as u32 * 12;
+    let reporting_period_coverage =
+        reporting_period_engine::compute_coverage(&exec.reporting_periods, max_month);
+
     Ok(ExecutionProjectSummaryDto {
         project_info: ProjectInfoDto {
             project_title: project.config.project_title.clone(),
@@ -377,6 +458,9 @@ pub(crate) fn build_summary(
         equipment_procurements,
         actual_cost_entries,
         subcontracting_lines,
+        deliverables,
+        reporting_periods,
+        reporting_period_coverage,
     })
 }
 
@@ -389,8 +473,18 @@ pub fn open_execution_project(
     path: String,
 ) -> Result<ExecutionProjectSummaryDto, AppError> {
     let file_path = std::path::PathBuf::from(&path);
-    let (project, exec) = persistence::load_execution(&file_path)?;
+    let (project, mut exec) = persistence::load_execution(&file_path)?;
+
+    // BR-RP-05: pre-populate default reporting periods the first time this
+    // project is opened in the Execution App.
+    if exec.reporting_periods.is_empty() {
+        let max_month = project.config.duration_years as u32 * 12;
+        exec.reporting_periods =
+            reporting_period_engine::generate_default_reporting_periods(max_month);
+    }
+
     let summary = build_summary(&project, &exec, &state)?;
+    persistence::auto_save(&project, &exec, &file_path)?;
 
     *state.project.lock().unwrap() = Some(project);
     *state.execution_data.lock().unwrap() = Some(exec);

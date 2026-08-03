@@ -1,8 +1,8 @@
 /**
  * Left navigation panel. Sprint E2 added Personnel/Work Packages/Milestones
- * (M-03/M-04/M-06) and Amendments; Sprint E3 adds Travel/Equipment/Other
- * Costs/Subcontracting (M-08–M-11). The rest wait for their sprint (E4:
- * Documents/Reports, E5: Risk/Issues/Periods).
+ * (M-03/M-04/M-06) and Amendments; Sprint E3 added Travel/Equipment/Other
+ * Costs/Subcontracting (M-08–M-11); Sprint E4 adds Deliverables (M-05) and
+ * Reporting Periods (M-14). The rest wait for Sprint E5 (Risk/Issues).
  */
 
 import { useExecutionStore } from '../store/executionStore';
@@ -11,6 +11,7 @@ import type { ExecutionScreen } from '../types';
 const MODULES: { label: string; screen: ExecutionScreen | null }[] = [
   { label: 'Dashboard', screen: 'dashboard' },
   { label: 'Work Packages', screen: 'work-packages' },
+  { label: 'Deliverables', screen: 'deliverables' },
   { label: 'Personnel', screen: 'personnel' },
   { label: 'Milestones', screen: 'milestones' },
   { label: 'Amendments', screen: 'amendments' },
@@ -18,9 +19,9 @@ const MODULES: { label: string; screen: ExecutionScreen | null }[] = [
   { label: 'Equipment', screen: 'equipment' },
   { label: 'Other Costs', screen: 'other-costs' },
   { label: 'Subcontracting', screen: 'subcontracting' },
+  { label: 'Reporting Periods', screen: 'reporting-periods' },
   { label: 'Risk Register', screen: null },
   { label: 'Issue Log', screen: null },
-  { label: 'Reporting Periods', screen: null },
   { label: 'Reports & Export', screen: null },
 ];
 

@@ -62,6 +62,12 @@ const summary: ExecutionProjectSummaryDto = {
   equipment_procurements: [],
   actual_cost_entries: [],
   subcontracting_lines: [],
+  deliverables: [],
+  reporting_periods: [],
+  reporting_period_coverage: {
+    gaps_detected: false,
+    final_period_covers_project_end: true,
+  },
 };
 
 describe('useExecutionStore', () => {

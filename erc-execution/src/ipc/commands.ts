@@ -8,11 +8,13 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   ActualCostEntryInputDto,
   AmendmentInputDto,
+  DeliverableInputDto,
   EquipmentProcurementInputDto,
   ExecutionProjectSummaryDto,
   MilestoneInputDto,
   PersonInputDto,
   PersonMonthRecordInputDto,
+  ReportingPeriodInputDto,
   SubcontractingLineInputDto,
   TripExecutionInputDto,
   WorkPackageExecutionInputDto,
@@ -141,3 +143,31 @@ export const updateSubcontractingLine = (
 
 export const deleteSubcontractingLine = (id: string): Promise<ExecutionProjectSummaryDto> =>
   invoke('delete_subcontracting_line', { id });
+
+// ─── M-05: Deliverable Tracking ──────────────────────────────────────────────────
+
+export const addDeliverable = (
+  input: DeliverableInputDto,
+): Promise<ExecutionProjectSummaryDto> => invoke('add_deliverable', { input });
+
+export const updateDeliverable = (
+  id: string,
+  input: DeliverableInputDto,
+): Promise<ExecutionProjectSummaryDto> => invoke('update_deliverable', { id, input });
+
+export const deleteDeliverable = (id: string): Promise<ExecutionProjectSummaryDto> =>
+  invoke('delete_deliverable', { id });
+
+// ─── M-14: Reporting Period Management ───────────────────────────────────────────
+
+export const addReportingPeriod = (
+  input: ReportingPeriodInputDto,
+): Promise<ExecutionProjectSummaryDto> => invoke('add_reporting_period', { input });
+
+export const updateReportingPeriod = (
+  id: string,
+  input: ReportingPeriodInputDto,
+): Promise<ExecutionProjectSummaryDto> => invoke('update_reporting_period', { id, input });
+
+export const deleteReportingPeriod = (id: string): Promise<ExecutionProjectSummaryDto> =>
+  invoke('delete_reporting_period', { id });

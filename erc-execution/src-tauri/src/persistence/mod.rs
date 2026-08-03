@@ -229,6 +229,7 @@ mod tests {
             planned_month: 6,
             status: MilestoneStatus::OnTrack,
             actual_completion_month: None,
+            linked_deliverable_ids: vec![],
         });
         exec.amendments.push(Amendment {
             id: uuid::Uuid::new_v4(),
@@ -298,6 +299,50 @@ mod tests {
         });
 
         let path = temp_path("e3-entities-roundtrip");
+        save_execution(&project, &exec, &path).unwrap();
+        let (_, reloaded_exec) = load_execution(&path).unwrap();
+        std::fs::remove_file(&path).ok();
+
+        assert_eq!(exec, reloaded_exec);
+    }
+
+    #[test]
+    fn test_save_and_load_roundtrip_preserves_e4_entities() {
+        use crate::domain::enums::{
+            DeliverableStatus, DeliverableType, DisseminationLevel, ReportingPeriodStatus,
+        };
+        use crate::domain::execution_entities::{Deliverable, ReportingPeriod};
+
+        let project = make_project();
+        let mut exec = ExecutionData::default();
+        exec.deliverables.push(Deliverable {
+            id: uuid::Uuid::new_v4(),
+            deliverable_number: "D1.1".to_string(),
+            title: "Data Collection Protocol".to_string(),
+            deliverable_type: DeliverableType::Dataset,
+            work_package_id: 1,
+            planned_month: 6,
+            responsible_role_id: uuid::Uuid::new_v4(),
+            dissemination_level: DisseminationLevel::Public,
+            status: DeliverableStatus::Accepted,
+            actual_submission_date: Some("2026-06-15".to_string()),
+            revision_note: None,
+            revised_planned_month: None,
+            cordis_registered: true,
+            notes: None,
+        });
+        exec.reporting_periods.push(ReportingPeriod {
+            id: uuid::Uuid::new_v4(),
+            period_number: 1,
+            start_month: 1,
+            end_month: 12,
+            submission_deadline: Some("2027-02-01".to_string()),
+            technical_report_submitted: false,
+            financial_report_submitted: false,
+            status: ReportingPeriodStatus::Open,
+        });
+
+        let path = temp_path("e4-entities-roundtrip");
         save_execution(&project, &exec, &path).unwrap();
         let (_, reloaded_exec) = load_execution(&path).unwrap();
         std::fs::remove_file(&path).ok();

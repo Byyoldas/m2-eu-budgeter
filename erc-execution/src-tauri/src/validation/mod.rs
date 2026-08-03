@@ -4,12 +4,14 @@
 //! Amendment Management design (see `domain::enums::AmendmentType` doc comment).
 
 use crate::domain::dto::{
-    ActualCostEntryInputDto, AmendmentInputDto, EquipmentProcurementInputDto, MilestoneInputDto,
-    PersonInputDto, PersonMonthRecordInputDto, SubcontractingLineInputDto, TripExecutionInputDto,
-    WorkPackageExecutionInputDto,
+    ActualCostEntryInputDto, AmendmentInputDto, DeliverableInputDto, EquipmentProcurementInputDto,
+    MilestoneInputDto, PersonInputDto, PersonMonthRecordInputDto, ReportingPeriodInputDto,
+    SubcontractingLineInputDto, TripExecutionInputDto, WorkPackageExecutionInputDto,
 };
-use crate::domain::enums::MilestoneStatus;
-use crate::domain::execution_entities::{Person, SubcontractingLine, TripExecution};
+use crate::domain::enums::{DeliverableStatus, MilestoneStatus};
+use crate::domain::execution_entities::{
+    Deliverable, Person, ReportingPeriod, SubcontractingLine, TripExecution,
+};
 use crate::error::{AppError, FieldError, ValidationErrors};
 use erc_core::domain::entities::{EquipmentItem, OtherDirectCostItem, PersonnelRole, Trip};
 use rust_decimal::Decimal;
@@ -213,6 +215,7 @@ pub fn validate_milestone(
     dto: &MilestoneInputDto,
     work_package_count: u8,
     max_month: u32,
+    deliverables: &[Deliverable],
 ) -> Result<(), AppError> {
     let mut errors = ValidationErrors::default();
 
@@ -254,6 +257,202 @@ pub fn validate_milestone(
                 format!("Actual completion month must be between 1 and {max_month}."),
             ));
         }
+    }
+
+    for deliverable_id in &dto.linked_deliverable_ids {
+        if !deliverables.iter().any(|d| d.id == *deliverable_id) {
+            errors.push(FieldError::new(
+                "linked_deliverable_ids",
+                "NOT_FOUND",
+                "Linked deliverable does not exist in this project.",
+            ));
+            break;
+        }
+    }
+
+    errors.into_result()
+}
+
+/// BR-MS-02: a milestone can only be marked `Completed` once every linked
+/// deliverable is `Accepted`. Called explicitly by `commands::milestones`
+/// whenever a mutation would set `status` to `Completed` — not folded into
+/// `validate_milestone` itself, since that runs on every save regardless of
+/// the target status.
+pub fn validate_milestone_completion(
+    linked_deliverable_ids: &[Uuid],
+    deliverables: &[Deliverable],
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    let all_accepted = linked_deliverable_ids.iter().all(|id| {
+        deliverables
+            .iter()
+            .find(|d| d.id == *id)
+            .is_some_and(|d| d.status == DeliverableStatus::Accepted)
+    });
+    if !all_accepted {
+        errors.push(FieldError::new(
+            "status",
+            "DELIVERABLES_NOT_ACCEPTED",
+            "All linked deliverables must be Accepted before this milestone can be completed.",
+        ));
+    }
+
+    errors.into_result()
+}
+
+// ─── M-05: Deliverable Tracking ────────────────────────────────────────────────
+
+pub fn validate_deliverable(
+    dto: &DeliverableInputDto,
+    work_package_count: u8,
+    max_month: u32,
+    roles: &[PersonnelRole],
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    if dto.title.trim().is_empty() {
+        errors.push(FieldError::new("title", "REQUIRED", "Title is required."));
+    }
+
+    if dto.work_package_id == 0 || dto.work_package_id > work_package_count {
+        errors.push(FieldError::new(
+            "work_package_id",
+            "OUT_OF_RANGE",
+            "Work package does not exist in this project.",
+        ));
+    }
+
+    if dto.planned_month == 0 || dto.planned_month > max_month {
+        errors.push(FieldError::new(
+            "planned_month",
+            "OUT_OF_RANGE",
+            format!("Planned month must be between 1 and {max_month}."),
+        ));
+    }
+
+    if !roles.iter().any(|r| r.id == dto.responsible_role_id) {
+        errors.push(FieldError::new(
+            "responsible_role_id",
+            "NOT_FOUND",
+            "Responsible role does not exist in this project's budget.",
+        ));
+    }
+
+    if let Some(date) = &dto.actual_submission_date {
+        if parse_iso_date(date).is_none() {
+            errors.push(FieldError::new(
+                "actual_submission_date",
+                "INVALID_DATE",
+                "Actual submission date must be a valid date (YYYY-MM-DD).",
+            ));
+        }
+    }
+
+    // BR-DEL-03: Rejected deliverables must have a revision note and a
+    // revised planned month.
+    if dto.status == DeliverableStatus::Rejected {
+        if dto.revision_note.as_deref().unwrap_or("").trim().is_empty() {
+            errors.push(FieldError::new(
+                "revision_note",
+                "REQUIRED",
+                "A revision note is required for rejected deliverables.",
+            ));
+        }
+        if dto.revised_planned_month.is_none() {
+            errors.push(FieldError::new(
+                "revised_planned_month",
+                "REQUIRED",
+                "A revised planned month is required for rejected deliverables.",
+            ));
+        }
+    }
+
+    if let Some(month) = dto.revised_planned_month {
+        if month == 0 || month > max_month {
+            errors.push(FieldError::new(
+                "revised_planned_month",
+                "OUT_OF_RANGE",
+                format!("Revised planned month must be between 1 and {max_month}."),
+            ));
+        }
+    }
+
+    errors.into_result()
+}
+
+// ─── M-14: Reporting Period Management ─────────────────────────────────────────
+
+/// # Arguments
+/// * `exclude_id` — this period's own id, when validating an update
+///   (excluded from the BR-RP overlap check).
+///
+/// BR-RP-01/02 (full, gapless coverage of the project duration, and the
+/// final period ending exactly at `max_month`) are surfaced as advisory
+/// warnings on the periods list (`build_summary`) rather than enforced here
+/// — blocking single-record edits on a collective, whole-list invariant
+/// would make editing one period at a time impossible. Only the per-record
+/// range/overlap checks and BR-RP-03 are hard-enforced.
+pub fn validate_reporting_period(
+    dto: &ReportingPeriodInputDto,
+    existing_periods: &[ReportingPeriod],
+    max_month: u32,
+    exclude_id: Option<Uuid>,
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    if dto.start_month == 0 || dto.start_month > max_month {
+        errors.push(FieldError::new(
+            "start_month",
+            "OUT_OF_RANGE",
+            format!("Start month must be between 1 and {max_month}."),
+        ));
+    }
+    if dto.end_month == 0 || dto.end_month > max_month {
+        errors.push(FieldError::new(
+            "end_month",
+            "OUT_OF_RANGE",
+            format!("End month must be between 1 and {max_month}."),
+        ));
+    }
+    if dto.start_month > dto.end_month {
+        errors.push(FieldError::new(
+            "end_month",
+            "BEFORE_START",
+            "End month cannot be before start month.",
+        ));
+    }
+
+    let overlaps = existing_periods.iter().any(|p| {
+        Some(p.id) != exclude_id && dto.start_month <= p.end_month && p.start_month <= dto.end_month
+    });
+    if overlaps {
+        errors.push(FieldError::new(
+            "start_month",
+            "OVERLAPS_EXISTING",
+            "This period overlaps an existing reporting period.",
+        ));
+    }
+
+    if let Some(deadline) = &dto.submission_deadline {
+        if parse_iso_date(deadline).is_none() {
+            errors.push(FieldError::new(
+                "submission_deadline",
+                "INVALID_DATE",
+                "Submission deadline must be a valid date (YYYY-MM-DD).",
+            ));
+        }
+    }
+
+    // BR-RP-03: cannot move to Submitted without both report flags set.
+    if dto.status == crate::domain::enums::ReportingPeriodStatus::Submitted
+        && !(dto.technical_report_submitted && dto.financial_report_submitted)
+    {
+        errors.push(FieldError::new(
+            "status",
+            "REPORTS_INCOMPLETE",
+            "Both the technical and financial report must be submitted before this period can be marked Submitted.",
+        ));
     }
 
     errors.into_result()
@@ -853,43 +1052,80 @@ mod tests {
             planned_month,
             status: MilestoneStatus::NotStarted,
             actual_completion_month: None,
+            linked_deliverable_ids: vec![],
         }
     }
 
     #[test]
     fn test_val_ms_valid() {
-        assert!(validate_milestone(&milestone_dto(1, 6), 3, 36).is_ok());
+        assert!(validate_milestone(&milestone_dto(1, 6), 3, 36, &[]).is_ok());
     }
 
     #[test]
     fn test_val_ms_empty_title_returns_error() {
         let mut dto = milestone_dto(1, 6);
         dto.title = "".to_string();
-        assert!(validate_milestone(&dto, 3, 36).is_err());
+        assert!(validate_milestone(&dto, 3, 36, &[]).is_err());
     }
 
     #[test]
     fn test_val_ms_wp_out_of_range_returns_error() {
-        assert!(validate_milestone(&milestone_dto(9, 6), 3, 36).is_err());
+        assert!(validate_milestone(&milestone_dto(9, 6), 3, 36, &[]).is_err());
     }
 
     #[test]
     fn test_val_ms_month_out_of_range_returns_error() {
-        assert!(validate_milestone(&milestone_dto(1, 99), 3, 36).is_err());
+        assert!(validate_milestone(&milestone_dto(1, 99), 3, 36, &[]).is_err());
     }
 
     #[test]
     fn test_val_ms_direct_at_risk_status_returns_error() {
         let mut dto = milestone_dto(1, 6);
         dto.status = MilestoneStatus::AtRisk;
-        assert!(validate_milestone(&dto, 3, 36).is_err());
+        assert!(validate_milestone(&dto, 3, 36, &[]).is_err());
     }
 
     #[test]
     fn test_val_ms_actual_completion_out_of_range_returns_error() {
         let mut dto = milestone_dto(1, 6);
         dto.actual_completion_month = Some(99);
-        assert!(validate_milestone(&dto, 3, 36).is_err());
+        assert!(validate_milestone(&dto, 3, 36, &[]).is_err());
+    }
+
+    #[test]
+    fn test_val_ms_unknown_linked_deliverable_returns_error() {
+        let mut dto = milestone_dto(1, 6);
+        dto.linked_deliverable_ids = vec![Uuid::new_v4()];
+        assert!(validate_milestone(&dto, 3, 36, &[]).is_err());
+    }
+
+    #[test]
+    fn test_val_ms_known_linked_deliverable_is_ok() {
+        let deliverable = make_deliverable(DeliverableStatus::NotStarted);
+        let mut dto = milestone_dto(1, 6);
+        dto.linked_deliverable_ids = vec![deliverable.id];
+        assert!(validate_milestone(&dto, 3, 36, &[deliverable]).is_ok());
+    }
+
+    // ─── validate_milestone_completion ──────────────────────────────────
+
+    #[test]
+    fn test_val_ms_completion_all_accepted_is_ok() {
+        let deliverable = make_deliverable(DeliverableStatus::Accepted);
+        let id = deliverable.id;
+        assert!(validate_milestone_completion(&[id], &[deliverable]).is_ok());
+    }
+
+    #[test]
+    fn test_val_ms_completion_no_links_is_ok() {
+        assert!(validate_milestone_completion(&[], &[]).is_ok());
+    }
+
+    #[test]
+    fn test_val_ms_completion_unaccepted_deliverable_returns_error() {
+        let deliverable = make_deliverable(DeliverableStatus::Submitted);
+        let id = deliverable.id;
+        assert!(validate_milestone_completion(&[id], &[deliverable]).is_err());
     }
 
     // ─── validate_amendment ─────────────────────────────────────────────
@@ -1275,5 +1511,210 @@ mod tests {
         let mut dto = subcontracting_line_dto(dec!(1000));
         dto.work_package_id = 9;
         assert!(validate_subcontracting_line(&dto, &[], dec!(5000), 3, None).is_err());
+    }
+
+    // ─── validate_deliverable ────────────────────────────────────────────
+
+    fn make_deliverable(status: DeliverableStatus) -> Deliverable {
+        Deliverable {
+            id: Uuid::new_v4(),
+            deliverable_number: "D1.1".to_string(),
+            title: "Data Collection Protocol".to_string(),
+            deliverable_type: crate::domain::enums::DeliverableType::Dataset,
+            work_package_id: 1,
+            planned_month: 6,
+            responsible_role_id: Uuid::new_v4(),
+            dissemination_level: crate::domain::enums::DisseminationLevel::Public,
+            status,
+            actual_submission_date: None,
+            revision_note: None,
+            revised_planned_month: None,
+            cordis_registered: false,
+            notes: None,
+        }
+    }
+
+    fn deliverable_dto(role_id: Uuid) -> DeliverableInputDto {
+        DeliverableInputDto {
+            title: "Data Collection Protocol".to_string(),
+            deliverable_type: crate::domain::enums::DeliverableType::Dataset,
+            work_package_id: 1,
+            planned_month: 6,
+            responsible_role_id: role_id,
+            dissemination_level: crate::domain::enums::DisseminationLevel::Public,
+            status: DeliverableStatus::NotStarted,
+            actual_submission_date: None,
+            revision_note: None,
+            revised_planned_month: None,
+            cordis_registered: false,
+            notes: None,
+        }
+    }
+
+    #[test]
+    fn test_val_del_valid() {
+        let role_id = Uuid::new_v4();
+        let roles = vec![make_role(role_id, 1, 12)];
+        assert!(validate_deliverable(&deliverable_dto(role_id), 3, 36, &roles).is_ok());
+    }
+
+    #[test]
+    fn test_val_del_empty_title_returns_error() {
+        let role_id = Uuid::new_v4();
+        let roles = vec![make_role(role_id, 1, 12)];
+        let mut dto = deliverable_dto(role_id);
+        dto.title = "".to_string();
+        assert!(validate_deliverable(&dto, 3, 36, &roles).is_err());
+    }
+
+    #[test]
+    fn test_val_del_wp_out_of_range_returns_error() {
+        let role_id = Uuid::new_v4();
+        let roles = vec![make_role(role_id, 1, 12)];
+        let mut dto = deliverable_dto(role_id);
+        dto.work_package_id = 9;
+        assert!(validate_deliverable(&dto, 3, 36, &roles).is_err());
+    }
+
+    #[test]
+    fn test_val_del_month_out_of_range_returns_error() {
+        let role_id = Uuid::new_v4();
+        let roles = vec![make_role(role_id, 1, 12)];
+        let mut dto = deliverable_dto(role_id);
+        dto.planned_month = 99;
+        assert!(validate_deliverable(&dto, 3, 36, &roles).is_err());
+    }
+
+    #[test]
+    fn test_val_del_unknown_responsible_role_returns_error() {
+        assert!(validate_deliverable(&deliverable_dto(Uuid::new_v4()), 3, 36, &[]).is_err());
+    }
+
+    #[test]
+    fn test_val_del_invalid_submission_date_returns_error() {
+        let role_id = Uuid::new_v4();
+        let roles = vec![make_role(role_id, 1, 12)];
+        let mut dto = deliverable_dto(role_id);
+        dto.actual_submission_date = Some("not-a-date".to_string());
+        assert!(validate_deliverable(&dto, 3, 36, &roles).is_err());
+    }
+
+    #[test]
+    fn test_val_del_rejected_without_revision_note_returns_error() {
+        let role_id = Uuid::new_v4();
+        let roles = vec![make_role(role_id, 1, 12)];
+        let mut dto = deliverable_dto(role_id);
+        dto.status = DeliverableStatus::Rejected;
+        assert!(validate_deliverable(&dto, 3, 36, &roles).is_err());
+    }
+
+    #[test]
+    fn test_val_del_rejected_with_revision_note_and_month_is_ok() {
+        let role_id = Uuid::new_v4();
+        let roles = vec![make_role(role_id, 1, 12)];
+        let mut dto = deliverable_dto(role_id);
+        dto.status = DeliverableStatus::Rejected;
+        dto.revision_note = Some("Needs more detail on methodology.".to_string());
+        dto.revised_planned_month = Some(9);
+        assert!(validate_deliverable(&dto, 3, 36, &roles).is_ok());
+    }
+
+    #[test]
+    fn test_val_del_revised_month_out_of_range_returns_error() {
+        let role_id = Uuid::new_v4();
+        let roles = vec![make_role(role_id, 1, 12)];
+        let mut dto = deliverable_dto(role_id);
+        dto.status = DeliverableStatus::Rejected;
+        dto.revision_note = Some("Needs rework.".to_string());
+        dto.revised_planned_month = Some(99);
+        assert!(validate_deliverable(&dto, 3, 36, &roles).is_err());
+    }
+
+    // ─── validate_reporting_period ──────────────────────────────────────
+
+    fn reporting_period_dto(start: u32, end: u32) -> ReportingPeriodInputDto {
+        ReportingPeriodInputDto {
+            start_month: start,
+            end_month: end,
+            submission_deadline: None,
+            technical_report_submitted: false,
+            financial_report_submitted: false,
+            status: crate::domain::enums::ReportingPeriodStatus::Open,
+        }
+    }
+
+    fn make_reporting_period(start: u32, end: u32) -> ReportingPeriod {
+        ReportingPeriod {
+            id: Uuid::new_v4(),
+            period_number: 1,
+            start_month: start,
+            end_month: end,
+            submission_deadline: None,
+            technical_report_submitted: false,
+            financial_report_submitted: false,
+            status: crate::domain::enums::ReportingPeriodStatus::Open,
+        }
+    }
+
+    #[test]
+    fn test_val_rp_valid() {
+        assert!(validate_reporting_period(&reporting_period_dto(1, 18), &[], 36, None).is_ok());
+    }
+
+    #[test]
+    fn test_val_rp_start_out_of_range_returns_error() {
+        assert!(validate_reporting_period(&reporting_period_dto(0, 18), &[], 36, None).is_err());
+    }
+
+    #[test]
+    fn test_val_rp_end_before_start_returns_error() {
+        assert!(validate_reporting_period(&reporting_period_dto(18, 10), &[], 36, None).is_err());
+    }
+
+    #[test]
+    fn test_val_rp_overlaps_existing_returns_error() {
+        let existing = make_reporting_period(1, 18);
+        assert!(
+            validate_reporting_period(&reporting_period_dto(15, 24), &[existing], 36, None)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_val_rp_update_excludes_self_from_overlap_check() {
+        let self_id = Uuid::new_v4();
+        let mut existing = make_reporting_period(1, 18);
+        existing.id = self_id;
+        assert!(validate_reporting_period(
+            &reporting_period_dto(1, 20),
+            &[existing],
+            36,
+            Some(self_id)
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_val_rp_invalid_deadline_returns_error() {
+        let mut dto = reporting_period_dto(1, 18);
+        dto.submission_deadline = Some("not-a-date".to_string());
+        assert!(validate_reporting_period(&dto, &[], 36, None).is_err());
+    }
+
+    #[test]
+    fn test_val_rp_submitted_without_both_flags_returns_error() {
+        let mut dto = reporting_period_dto(1, 18);
+        dto.status = crate::domain::enums::ReportingPeriodStatus::Submitted;
+        dto.technical_report_submitted = true;
+        assert!(validate_reporting_period(&dto, &[], 36, None).is_err());
+    }
+
+    #[test]
+    fn test_val_rp_submitted_with_both_flags_is_ok() {
+        let mut dto = reporting_period_dto(1, 18);
+        dto.status = crate::domain::enums::ReportingPeriodStatus::Submitted;
+        dto.technical_report_submitted = true;
+        dto.financial_report_submitted = true;
+        assert!(validate_reporting_period(&dto, &[], 36, None).is_ok());
     }
 }
