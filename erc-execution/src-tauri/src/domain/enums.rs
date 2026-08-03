@@ -103,3 +103,31 @@ pub enum ReportingPeriodStatus {
     Open,
     Submitted,
 }
+
+/// A generic Low/Medium/High scale, reused for both `RiskEntry`'s
+/// `probability`/`impact` (M-12, BR-RK-01) and `IssueEntry`'s `priority`
+/// (M-13) — same ordinal scale, different roles, no reason to duplicate the
+/// type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Level {
+    Low,
+    Medium,
+    High,
+}
+
+/// M-12 risk status. BR-RK-04: `Closed` is terminal — see
+/// `validation::validate_risk_entry`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RiskStatus {
+    Open,
+    Mitigated,
+    Closed,
+}
+
+/// M-13 issue status. BR-IS-01: `Closed` requires a `resolution` — see
+/// `validation::validate_issue_entry`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IssueStatus {
+    Open,
+    Closed,
+}

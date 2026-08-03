@@ -13,7 +13,7 @@
 
 use super::enums::{
     AmendmentStatus, AmendmentType, DeliverableStatus, DeliverableType, DisseminationLevel,
-    EntryStatus, MilestoneStatus, ReportingPeriodStatus,
+    EntryStatus, IssueStatus, Level, MilestoneStatus, ReportingPeriodStatus, RiskStatus,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,10 @@ pub struct ExecutionData {
     pub deliverables: Vec<Deliverable>,
     #[serde(default)]
     pub reporting_periods: Vec<ReportingPeriod>,
+    #[serde(default)]
+    pub risks: Vec<RiskEntry>,
+    #[serde(default)]
+    pub issues: Vec<IssueEntry>,
 }
 
 impl Default for ExecutionData {
@@ -63,6 +67,8 @@ impl Default for ExecutionData {
             actual_cost_entries: Vec::new(),
             subcontracting_lines: Vec::new(),
             deliverables: Vec::new(),
+            risks: Vec::new(),
+            issues: Vec::new(),
             reporting_periods: Vec::new(),
         }
     }
@@ -268,6 +274,45 @@ pub struct ReportingPeriod {
     pub status: ReportingPeriodStatus,
 }
 
+/// A project risk (M-12). `probability`/`impact` combine into a derived
+/// `risk_score`/priority — see `engines::risk_engine`. BR-RK-04: once
+/// `Closed`, terminal (enforced by `validation::validate_risk_entry`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RiskEntry {
+    pub id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub work_package_id: Option<u8>,
+    pub probability: Level,
+    pub impact: Level,
+    pub mitigation: Option<String>,
+    pub status: RiskStatus,
+    /// References `erc_core::domain::entities::PersonnelRole.id`.
+    pub owner_role_id: Option<Uuid>,
+    pub identified_date: String,
+    /// BR-RK-03: required, and must be within 30 days of today, once this
+    /// risk's derived priority is `High`.
+    pub review_date: Option<String>,
+    pub closed_date: Option<String>,
+}
+
+/// A project issue (M-13). BR-IS-01: `Closed` requires `resolution`.
+/// BR-IS-03: may optionally reference a `RiskEntry` it manifested from.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IssueEntry {
+    pub id: Uuid,
+    pub description: String,
+    pub work_package_id: Option<u8>,
+    pub raised_date: String,
+    pub priority: Level,
+    /// References `erc_core::domain::entities::PersonnelRole.id`.
+    pub owner_role_id: Option<Uuid>,
+    pub status: IssueStatus,
+    pub resolution: Option<String>,
+    /// References `RiskEntry.id`.
+    pub linked_risk_id: Option<Uuid>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,6 +332,8 @@ mod tests {
         assert!(data.subcontracting_lines.is_empty());
         assert!(data.deliverables.is_empty());
         assert!(data.reporting_periods.is_empty());
+        assert!(data.risks.is_empty());
+        assert!(data.issues.is_empty());
     }
 
     #[test]

@@ -1,8 +1,9 @@
 /**
  * Left navigation panel. Sprint E2 added Personnel/Work Packages/Milestones
  * (M-03/M-04/M-06) and Amendments; Sprint E3 added Travel/Equipment/Other
- * Costs/Subcontracting (M-08–M-11); Sprint E4 adds Deliverables (M-05) and
- * Reporting Periods (M-14). The rest wait for Sprint E5 (Risk/Issues).
+ * Costs/Subcontracting (M-08–M-11); Sprint E4 added Deliverables (M-05) and
+ * Reporting Periods (M-14); Sprint E5 adds Risk Register (M-12) and Issue
+ * Log (M-13). Reports & Export (M-20) waits for a later sprint.
  */
 
 import { useExecutionStore } from '../store/executionStore';
@@ -20,8 +21,8 @@ const MODULES: { label: string; screen: ExecutionScreen | null }[] = [
   { label: 'Other Costs', screen: 'other-costs' },
   { label: 'Subcontracting', screen: 'subcontracting' },
   { label: 'Reporting Periods', screen: 'reporting-periods' },
-  { label: 'Risk Register', screen: null },
-  { label: 'Issue Log', screen: null },
+  { label: 'Risk Register', screen: 'risk-register' },
+  { label: 'Issue Log', screen: 'issue-log' },
   { label: 'Reports & Export', screen: null },
 ];
 

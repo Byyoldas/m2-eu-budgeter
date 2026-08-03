@@ -92,6 +92,14 @@ pub fn run() {
             commands::reporting_periods::add_reporting_period,
             commands::reporting_periods::update_reporting_period,
             commands::reporting_periods::delete_reporting_period,
+            // M-12: Risk Register
+            commands::risks::add_risk_entry,
+            commands::risks::update_risk_entry,
+            commands::risks::delete_risk_entry,
+            // M-13: Issue Log
+            commands::issues::add_issue_entry,
+            commands::issues::update_issue_entry,
+            commands::issues::delete_issue_entry,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

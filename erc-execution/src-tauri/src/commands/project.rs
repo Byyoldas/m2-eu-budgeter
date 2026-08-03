@@ -5,13 +5,14 @@
 
 use crate::domain::dto::{
     ActualCostEntryDetailDto, AmendmentDetailDto, DeliverableDetailDto,
-    EquipmentProcurementDetailDto, ExecutionProjectSummaryDto, MilestoneDetailDto, PersonDetailDto,
-    PersonMonthDetailDto, PersonnelRoleSummaryDto, PlannedEquipmentSummaryDto,
-    PlannedOtherCostSummaryDto, PlannedTripSummaryDto, ProjectInfoDto, ReportingPeriodDetailDto,
-    SubcontractingLineDetailDto, TripExecutionDetailDto, WorkPackageExecutionDetailDto,
+    EquipmentProcurementDetailDto, ExecutionProjectSummaryDto, IssueEntryDetailDto,
+    MilestoneDetailDto, PersonDetailDto, PersonMonthDetailDto, PersonnelRoleSummaryDto,
+    PlannedEquipmentSummaryDto, PlannedOtherCostSummaryDto, PlannedTripSummaryDto, ProjectInfoDto,
+    ReportingPeriodDetailDto, RiskEntryDetailDto, SubcontractingLineDetailDto,
+    TripExecutionDetailDto, WorkPackageExecutionDetailDto,
 };
 use crate::domain::execution_entities::ExecutionData;
-use crate::engines::{financial_engine, progress_engine, reporting_period_engine};
+use crate::engines::{financial_engine, progress_engine, reporting_period_engine, risk_engine};
 use crate::error::AppError;
 use crate::persistence;
 use crate::AppState;
@@ -434,6 +435,60 @@ pub(crate) fn build_summary(
     let reporting_period_coverage =
         reporting_period_engine::compute_coverage(&exec.reporting_periods, max_month);
 
+    let role_label = |role_id: Option<uuid::Uuid>| {
+        role_id.and_then(|id| {
+            project
+                .personnel_roles
+                .iter()
+                .find(|r| r.id == id)
+                .map(|r| r.role_label.clone())
+        })
+    };
+
+    let risks: Vec<RiskEntryDetailDto> = exec
+        .risks
+        .iter()
+        .map(|r| {
+            let risk_score = risk_engine::risk_score(r.probability, r.impact);
+            RiskEntryDetailDto {
+                id: r.id,
+                title: r.title.clone(),
+                description: r.description.clone(),
+                work_package_id: r.work_package_id,
+                probability: r.probability,
+                impact: r.impact,
+                mitigation: r.mitigation.clone(),
+                status: r.status,
+                owner_role_id: r.owner_role_id,
+                owner_role_label: role_label(r.owner_role_id),
+                identified_date: r.identified_date.clone(),
+                review_date: r.review_date.clone(),
+                closed_date: r.closed_date.clone(),
+                risk_score,
+                priority: risk_engine::derive_risk_priority(risk_score),
+            }
+        })
+        .collect();
+
+    let today = chrono::Utc::now().date_naive();
+    let issues: Vec<IssueEntryDetailDto> = exec
+        .issues
+        .iter()
+        .map(|i| IssueEntryDetailDto {
+            id: i.id,
+            description: i.description.clone(),
+            work_package_id: i.work_package_id,
+            raised_date: i.raised_date.clone(),
+            priority: i.priority,
+            owner_role_id: i.owner_role_id,
+            owner_role_label: role_label(i.owner_role_id),
+            status: i.status,
+            resolution: i.resolution.clone(),
+            linked_risk_id: i.linked_risk_id,
+            is_stale_warning: risk_engine::is_issue_stale_high_priority(i, today),
+        })
+        .collect();
+
     Ok(ExecutionProjectSummaryDto {
         project_info: ProjectInfoDto {
             project_title: project.config.project_title.clone(),
@@ -461,6 +516,8 @@ pub(crate) fn build_summary(
         deliverables,
         reporting_periods,
         reporting_period_coverage,
+        risks,
+        issues,
     })
 }
 

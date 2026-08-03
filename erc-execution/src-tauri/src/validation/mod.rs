@@ -5,13 +5,15 @@
 
 use crate::domain::dto::{
     ActualCostEntryInputDto, AmendmentInputDto, DeliverableInputDto, EquipmentProcurementInputDto,
-    MilestoneInputDto, PersonInputDto, PersonMonthRecordInputDto, ReportingPeriodInputDto,
-    SubcontractingLineInputDto, TripExecutionInputDto, WorkPackageExecutionInputDto,
+    IssueEntryInputDto, MilestoneInputDto, PersonInputDto, PersonMonthRecordInputDto,
+    ReportingPeriodInputDto, RiskEntryInputDto, SubcontractingLineInputDto, TripExecutionInputDto,
+    WorkPackageExecutionInputDto,
 };
-use crate::domain::enums::{DeliverableStatus, MilestoneStatus};
+use crate::domain::enums::{DeliverableStatus, IssueStatus, Level, MilestoneStatus, RiskStatus};
 use crate::domain::execution_entities::{
-    Deliverable, Person, ReportingPeriod, SubcontractingLine, TripExecution,
+    Deliverable, Person, ReportingPeriod, RiskEntry, SubcontractingLine, TripExecution,
 };
+use crate::engines::risk_engine::{derive_risk_priority, risk_score};
 use crate::error::{AppError, FieldError, ValidationErrors};
 use erc_core::domain::entities::{EquipmentItem, OtherDirectCostItem, PersonnelRole, Trip};
 use rust_decimal::Decimal;
@@ -745,6 +747,184 @@ pub fn validate_subcontracting_line(
             "amount_eur",
             "EXCEEDS_PLANNED_SUBCONTRACTING",
             "Total subcontracting lines cannot exceed the planned subcontracting amount.",
+        ));
+    }
+
+    errors.into_result()
+}
+
+// ─── M-12: Risk Register ────────────────────────────────────────────────────────
+
+/// # Arguments
+/// * `existing_status` — the risk's current stored status, when validating
+///   an update (`None` on create). BR-RK-04: once `Closed`, terminal.
+/// * `today` — real calendar date (not project month) for BR-RK-03's 30-day
+///   review-date check.
+pub fn validate_risk_entry(
+    dto: &RiskEntryInputDto,
+    roles: &[PersonnelRole],
+    work_package_count: u8,
+    existing_status: Option<RiskStatus>,
+    today: chrono::NaiveDate,
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    if dto.title.trim().is_empty() {
+        errors.push(FieldError::new("title", "REQUIRED", "Title is required."));
+    }
+
+    if let Some(wp_id) = dto.work_package_id {
+        if wp_id == 0 || wp_id > work_package_count {
+            errors.push(FieldError::new(
+                "work_package_id",
+                "OUT_OF_RANGE",
+                "Work package does not exist in this project.",
+            ));
+        }
+    }
+
+    if let Some(owner_id) = dto.owner_role_id {
+        if !roles.iter().any(|r| r.id == owner_id) {
+            errors.push(FieldError::new(
+                "owner_role_id",
+                "NOT_FOUND",
+                "Owner role does not exist in this project's budget.",
+            ));
+        }
+    }
+
+    if parse_iso_date(&dto.identified_date).is_none() {
+        errors.push(FieldError::new(
+            "identified_date",
+            "INVALID_DATE",
+            "Identified date must be a valid date (YYYY-MM-DD).",
+        ));
+    }
+
+    // BR-RK-03: High-priority risks require a review date within 30 days.
+    if derive_risk_priority(risk_score(dto.probability, dto.impact)) == Level::High {
+        match dto.review_date.as_deref().and_then(parse_iso_date) {
+            None => errors.push(FieldError::new(
+                "review_date",
+                "REQUIRED",
+                "High-priority risks require a review date.",
+            )),
+            Some(review_date) => {
+                if review_date > today + chrono::Duration::days(30) {
+                    errors.push(FieldError::new(
+                        "review_date",
+                        "TOO_FAR_OUT",
+                        "High-priority risks require a review date within 30 days.",
+                    ));
+                }
+            }
+        }
+    } else if let Some(date) = &dto.review_date {
+        if parse_iso_date(date).is_none() {
+            errors.push(FieldError::new(
+                "review_date",
+                "INVALID_DATE",
+                "Review date must be a valid date (YYYY-MM-DD).",
+            ));
+        }
+    }
+
+    if let Some(date) = &dto.closed_date {
+        if parse_iso_date(date).is_none() {
+            errors.push(FieldError::new(
+                "closed_date",
+                "INVALID_DATE",
+                "Closed date must be a valid date (YYYY-MM-DD).",
+            ));
+        }
+    }
+
+    // BR-RK-04: a Closed risk cannot be re-opened.
+    if existing_status == Some(RiskStatus::Closed) && dto.status != RiskStatus::Closed {
+        errors.push(FieldError::new(
+            "status",
+            "CANNOT_REOPEN_CLOSED_RISK",
+            "A closed risk cannot be re-opened; create a new entry instead.",
+        ));
+    }
+
+    errors.into_result()
+}
+
+// ─── M-13: Issue Log ─────────────────────────────────────────────────────────────
+
+pub fn validate_issue_entry(
+    dto: &IssueEntryInputDto,
+    roles: &[PersonnelRole],
+    work_package_count: u8,
+    existing_risks: &[RiskEntry],
+    today: chrono::NaiveDate,
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    if dto.description.trim().is_empty() {
+        errors.push(FieldError::new(
+            "description",
+            "REQUIRED",
+            "Description is required.",
+        ));
+    }
+
+    if let Some(wp_id) = dto.work_package_id {
+        if wp_id == 0 || wp_id > work_package_count {
+            errors.push(FieldError::new(
+                "work_package_id",
+                "OUT_OF_RANGE",
+                "Work package does not exist in this project.",
+            ));
+        }
+    }
+
+    match parse_iso_date(&dto.raised_date) {
+        None => errors.push(FieldError::new(
+            "raised_date",
+            "INVALID_DATE",
+            "Raised date must be a valid date (YYYY-MM-DD).",
+        )),
+        Some(raised) => {
+            if raised > today {
+                errors.push(FieldError::new(
+                    "raised_date",
+                    "IN_FUTURE",
+                    "Raised date cannot be in the future.",
+                ));
+            }
+        }
+    }
+
+    if let Some(owner_id) = dto.owner_role_id {
+        if !roles.iter().any(|r| r.id == owner_id) {
+            errors.push(FieldError::new(
+                "owner_role_id",
+                "NOT_FOUND",
+                "Owner role does not exist in this project's budget.",
+            ));
+        }
+    }
+
+    if let Some(risk_id) = dto.linked_risk_id {
+        if !existing_risks.iter().any(|r| r.id == risk_id) {
+            errors.push(FieldError::new(
+                "linked_risk_id",
+                "NOT_FOUND",
+                "Linked risk does not exist in this project.",
+            ));
+        }
+    }
+
+    // BR-IS-01: an issue without a resolution cannot be marked Closed.
+    if dto.status == IssueStatus::Closed
+        && dto.resolution.as_deref().unwrap_or("").trim().is_empty()
+    {
+        errors.push(FieldError::new(
+            "resolution",
+            "REQUIRED",
+            "A resolution is required to close an issue.",
         ));
     }
 
@@ -1716,5 +1896,173 @@ mod tests {
         dto.technical_report_submitted = true;
         dto.financial_report_submitted = true;
         assert!(validate_reporting_period(&dto, &[], 36, None).is_ok());
+    }
+
+    // ─── validate_risk_entry ─────────────────────────────────────────────
+
+    fn today() -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(2026, 6, 1).unwrap()
+    }
+
+    fn risk_dto(probability: Level, impact: Level) -> RiskEntryInputDto {
+        RiskEntryInputDto {
+            title: "Key researcher departure".to_string(),
+            description: "PostDoc may leave for industry position.".to_string(),
+            work_package_id: Some(1),
+            probability,
+            impact,
+            mitigation: None,
+            status: RiskStatus::Open,
+            owner_role_id: None,
+            identified_date: "2026-01-01".to_string(),
+            review_date: None,
+            closed_date: None,
+        }
+    }
+
+    #[test]
+    fn test_val_risk_low_priority_no_review_date_is_ok() {
+        let dto = risk_dto(Level::Low, Level::Low);
+        assert!(validate_risk_entry(&dto, &[], 3, None, today()).is_ok());
+    }
+
+    #[test]
+    fn test_val_risk_empty_title_returns_error() {
+        let mut dto = risk_dto(Level::Low, Level::Low);
+        dto.title = "".to_string();
+        assert!(validate_risk_entry(&dto, &[], 3, None, today()).is_err());
+    }
+
+    #[test]
+    fn test_val_risk_wp_out_of_range_returns_error() {
+        let mut dto = risk_dto(Level::Low, Level::Low);
+        dto.work_package_id = Some(9);
+        assert!(validate_risk_entry(&dto, &[], 3, None, today()).is_err());
+    }
+
+    #[test]
+    fn test_val_risk_unknown_owner_returns_error() {
+        let mut dto = risk_dto(Level::Low, Level::Low);
+        dto.owner_role_id = Some(Uuid::new_v4());
+        assert!(validate_risk_entry(&dto, &[], 3, None, today()).is_err());
+    }
+
+    #[test]
+    fn test_val_risk_high_priority_without_review_date_returns_error() {
+        // Medium × High = 6 → High priority (BR-RK-02).
+        let dto = risk_dto(Level::Medium, Level::High);
+        assert!(validate_risk_entry(&dto, &[], 3, None, today()).is_err());
+    }
+
+    #[test]
+    fn test_val_risk_high_priority_with_near_review_date_is_ok() {
+        let mut dto = risk_dto(Level::High, Level::High);
+        dto.review_date = Some("2026-06-15".to_string());
+        assert!(validate_risk_entry(&dto, &[], 3, None, today()).is_ok());
+    }
+
+    #[test]
+    fn test_val_risk_high_priority_review_date_too_far_out_returns_error() {
+        let mut dto = risk_dto(Level::High, Level::High);
+        dto.review_date = Some("2026-12-01".to_string());
+        assert!(validate_risk_entry(&dto, &[], 3, None, today()).is_err());
+    }
+
+    #[test]
+    fn test_val_risk_cannot_reopen_closed_risk_returns_error() {
+        let mut dto = risk_dto(Level::Low, Level::Low);
+        dto.status = RiskStatus::Open;
+        assert!(validate_risk_entry(&dto, &[], 3, Some(RiskStatus::Closed), today()).is_err());
+    }
+
+    #[test]
+    fn test_val_risk_keeping_closed_risk_closed_is_ok() {
+        let mut dto = risk_dto(Level::Low, Level::Low);
+        dto.status = RiskStatus::Closed;
+        assert!(validate_risk_entry(&dto, &[], 3, Some(RiskStatus::Closed), today()).is_ok());
+    }
+
+    // ─── validate_issue_entry ────────────────────────────────────────────
+
+    fn issue_dto() -> IssueEntryInputDto {
+        IssueEntryInputDto {
+            description: "Equipment delivery delayed".to_string(),
+            work_package_id: Some(1),
+            raised_date: "2026-05-01".to_string(),
+            priority: Level::Medium,
+            owner_role_id: None,
+            status: IssueStatus::Open,
+            resolution: None,
+            linked_risk_id: None,
+        }
+    }
+
+    #[test]
+    fn test_val_issue_valid() {
+        assert!(validate_issue_entry(&issue_dto(), &[], 3, &[], today()).is_ok());
+    }
+
+    #[test]
+    fn test_val_issue_empty_description_returns_error() {
+        let mut dto = issue_dto();
+        dto.description = "".to_string();
+        assert!(validate_issue_entry(&dto, &[], 3, &[], today()).is_err());
+    }
+
+    #[test]
+    fn test_val_issue_wp_out_of_range_returns_error() {
+        let mut dto = issue_dto();
+        dto.work_package_id = Some(9);
+        assert!(validate_issue_entry(&dto, &[], 3, &[], today()).is_err());
+    }
+
+    #[test]
+    fn test_val_issue_raised_date_in_future_returns_error() {
+        let mut dto = issue_dto();
+        dto.raised_date = "2026-12-01".to_string();
+        assert!(validate_issue_entry(&dto, &[], 3, &[], today()).is_err());
+    }
+
+    #[test]
+    fn test_val_issue_unknown_linked_risk_returns_error() {
+        let mut dto = issue_dto();
+        dto.linked_risk_id = Some(Uuid::new_v4());
+        assert!(validate_issue_entry(&dto, &[], 3, &[], today()).is_err());
+    }
+
+    #[test]
+    fn test_val_issue_known_linked_risk_is_ok() {
+        let risk = RiskEntry {
+            id: Uuid::new_v4(),
+            title: "Risk".to_string(),
+            description: "D".to_string(),
+            work_package_id: None,
+            probability: Level::Low,
+            impact: Level::Low,
+            mitigation: None,
+            status: RiskStatus::Open,
+            owner_role_id: None,
+            identified_date: "2026-01-01".to_string(),
+            review_date: None,
+            closed_date: None,
+        };
+        let mut dto = issue_dto();
+        dto.linked_risk_id = Some(risk.id);
+        assert!(validate_issue_entry(&dto, &[], 3, &[risk], today()).is_ok());
+    }
+
+    #[test]
+    fn test_val_issue_closed_without_resolution_returns_error() {
+        let mut dto = issue_dto();
+        dto.status = IssueStatus::Closed;
+        assert!(validate_issue_entry(&dto, &[], 3, &[], today()).is_err());
+    }
+
+    #[test]
+    fn test_val_issue_closed_with_resolution_is_ok() {
+        let mut dto = issue_dto();
+        dto.status = IssueStatus::Closed;
+        dto.resolution = Some("Delivery rescheduled and confirmed.".to_string());
+        assert!(validate_issue_entry(&dto, &[], 3, &[], today()).is_ok());
     }
 }

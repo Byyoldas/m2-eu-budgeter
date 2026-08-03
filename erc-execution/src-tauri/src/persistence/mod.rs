@@ -351,6 +351,48 @@ mod tests {
     }
 
     #[test]
+    fn test_save_and_load_roundtrip_preserves_e5_entities() {
+        use crate::domain::enums::{IssueStatus, Level, RiskStatus};
+        use crate::domain::execution_entities::{IssueEntry, RiskEntry};
+
+        let project = make_project();
+        let mut exec = ExecutionData::default();
+        let risk_id = uuid::Uuid::new_v4();
+        exec.risks.push(RiskEntry {
+            id: risk_id,
+            title: "Key researcher departure".to_string(),
+            description: "PostDoc may leave for industry position.".to_string(),
+            work_package_id: Some(1),
+            probability: Level::Medium,
+            impact: Level::High,
+            mitigation: Some("Cross-train a second team member.".to_string()),
+            status: RiskStatus::Open,
+            owner_role_id: None,
+            identified_date: "2026-01-01".to_string(),
+            review_date: Some("2026-06-15".to_string()),
+            closed_date: None,
+        });
+        exec.issues.push(IssueEntry {
+            id: uuid::Uuid::new_v4(),
+            description: "Equipment delivery delayed".to_string(),
+            work_package_id: Some(2),
+            raised_date: "2026-05-01".to_string(),
+            priority: Level::High,
+            owner_role_id: None,
+            status: IssueStatus::Open,
+            resolution: None,
+            linked_risk_id: Some(risk_id),
+        });
+
+        let path = temp_path("e5-entities-roundtrip");
+        save_execution(&project, &exec, &path).unwrap();
+        let (_, reloaded_exec) = load_execution(&path).unwrap();
+        std::fs::remove_file(&path).ok();
+
+        assert_eq!(exec, reloaded_exec);
+    }
+
+    #[test]
     fn test_save_writes_format_version_1_1() {
         let project = make_project();
         let exec = ExecutionData::default();

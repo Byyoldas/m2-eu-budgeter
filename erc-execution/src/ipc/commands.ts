@@ -11,10 +11,12 @@ import type {
   DeliverableInputDto,
   EquipmentProcurementInputDto,
   ExecutionProjectSummaryDto,
+  IssueEntryInputDto,
   MilestoneInputDto,
   PersonInputDto,
   PersonMonthRecordInputDto,
   ReportingPeriodInputDto,
+  RiskEntryInputDto,
   SubcontractingLineInputDto,
   TripExecutionInputDto,
   WorkPackageExecutionInputDto,
@@ -171,3 +173,29 @@ export const updateReportingPeriod = (
 
 export const deleteReportingPeriod = (id: string): Promise<ExecutionProjectSummaryDto> =>
   invoke('delete_reporting_period', { id });
+
+// ─── M-12: Risk Register ──────────────────────────────────────────────────────────
+
+export const addRiskEntry = (input: RiskEntryInputDto): Promise<ExecutionProjectSummaryDto> =>
+  invoke('add_risk_entry', { input });
+
+export const updateRiskEntry = (
+  id: string,
+  input: RiskEntryInputDto,
+): Promise<ExecutionProjectSummaryDto> => invoke('update_risk_entry', { id, input });
+
+export const deleteRiskEntry = (id: string): Promise<ExecutionProjectSummaryDto> =>
+  invoke('delete_risk_entry', { id });
+
+// ─── M-13: Issue Log ───────────────────────────────────────────────────────────────
+
+export const addIssueEntry = (input: IssueEntryInputDto): Promise<ExecutionProjectSummaryDto> =>
+  invoke('add_issue_entry', { input });
+
+export const updateIssueEntry = (
+  id: string,
+  input: IssueEntryInputDto,
+): Promise<ExecutionProjectSummaryDto> => invoke('update_issue_entry', { id, input });
+
+export const deleteIssueEntry = (id: string): Promise<ExecutionProjectSummaryDto> =>
+  invoke('delete_issue_entry', { id });

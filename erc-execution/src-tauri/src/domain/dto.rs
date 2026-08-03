@@ -8,7 +8,7 @@
 
 use super::enums::{
     AmendmentStatus, AmendmentType, DeliverableStatus, DeliverableType, DisseminationLevel,
-    EntryStatus, MilestoneStatus, ReportingPeriodStatus, WpStatus,
+    EntryStatus, IssueStatus, Level, MilestoneStatus, ReportingPeriodStatus, RiskStatus, WpStatus,
 };
 use erc_core::domain::dto::{BudgetSummaryDto, CfsStatus};
 use erc_core::domain::entities::RoleType;
@@ -62,6 +62,8 @@ pub struct ExecutionProjectSummaryDto {
     pub deliverables: Vec<DeliverableDetailDto>,
     pub reporting_periods: Vec<ReportingPeriodDetailDto>,
     pub reporting_period_coverage: ReportingPeriodCoverageDto,
+    pub risks: Vec<RiskEntryDetailDto>,
+    pub issues: Vec<IssueEntryDetailDto>,
 }
 
 /// UI-convenience projections of read-only Budget App entities, just enough
@@ -469,4 +471,72 @@ pub struct ReportingPeriodDetailDto {
 pub struct ReportingPeriodCoverageDto {
     pub gaps_detected: bool,
     pub final_period_covers_project_end: bool,
+}
+
+// ─── M-12: Risk Register ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskEntryInputDto {
+    pub title: String,
+    pub description: String,
+    pub work_package_id: Option<u8>,
+    pub probability: Level,
+    pub impact: Level,
+    pub mitigation: Option<String>,
+    pub status: RiskStatus,
+    pub owner_role_id: Option<Uuid>,
+    pub identified_date: String,
+    pub review_date: Option<String>,
+    pub closed_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskEntryDetailDto {
+    pub id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub work_package_id: Option<u8>,
+    pub probability: Level,
+    pub impact: Level,
+    pub mitigation: Option<String>,
+    pub status: RiskStatus,
+    pub owner_role_id: Option<Uuid>,
+    pub owner_role_label: Option<String>,
+    pub identified_date: String,
+    pub review_date: Option<String>,
+    pub closed_date: Option<String>,
+    /// BR-RK-01: `probability × impact`, range 1–9.
+    pub risk_score: u8,
+    /// BR-RK-02: derived from `risk_score` (≥6 High, 3–5 Medium, 1–2 Low).
+    pub priority: Level,
+}
+
+// ─── M-13: Issue Log ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueEntryInputDto {
+    pub description: String,
+    pub work_package_id: Option<u8>,
+    pub raised_date: String,
+    pub priority: Level,
+    pub owner_role_id: Option<Uuid>,
+    pub status: IssueStatus,
+    pub resolution: Option<String>,
+    pub linked_risk_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueEntryDetailDto {
+    pub id: Uuid,
+    pub description: String,
+    pub work_package_id: Option<u8>,
+    pub raised_date: String,
+    pub priority: Level,
+    pub owner_role_id: Option<Uuid>,
+    pub owner_role_label: Option<String>,
+    pub status: IssueStatus,
+    pub resolution: Option<String>,
+    pub linked_risk_id: Option<Uuid>,
+    /// BR-IS-02: `High` priority, still `Open`, raised more than 14 days ago.
+    pub is_stale_warning: bool,
 }

@@ -392,6 +392,75 @@ export interface ExecutionProjectSummaryDto {
   deliverables: DeliverableDetailDto[];
   reporting_periods: ReportingPeriodDetailDto[];
   reporting_period_coverage: ReportingPeriodCoverageDto;
+  risks: RiskEntryDetailDto[];
+  issues: IssueEntryDetailDto[];
+}
+
+// ─── M-12: Risk Register ────────────────────────────────────────────────────────
+
+export type Level = 'Low' | 'Medium' | 'High';
+
+export type RiskStatus = 'Open' | 'Mitigated' | 'Closed';
+
+export interface RiskEntryInputDto {
+  title: string;
+  description: string;
+  work_package_id: number | null;
+  probability: Level;
+  impact: Level;
+  mitigation: string | null;
+  status: RiskStatus;
+  owner_role_id: string | null;
+  identified_date: string;
+  review_date: string | null;
+  closed_date: string | null;
+}
+
+export interface RiskEntryDetailDto {
+  id: string;
+  title: string;
+  description: string;
+  work_package_id: number | null;
+  probability: Level;
+  impact: Level;
+  mitigation: string | null;
+  status: RiskStatus;
+  owner_role_id: string | null;
+  owner_role_label: string | null;
+  identified_date: string;
+  review_date: string | null;
+  closed_date: string | null;
+  risk_score: number;
+  priority: Level;
+}
+
+// ─── M-13: Issue Log ─────────────────────────────────────────────────────────────
+
+export type IssueStatus = 'Open' | 'Closed';
+
+export interface IssueEntryInputDto {
+  description: string;
+  work_package_id: number | null;
+  raised_date: string;
+  priority: Level;
+  owner_role_id: string | null;
+  status: IssueStatus;
+  resolution: string | null;
+  linked_risk_id: string | null;
+}
+
+export interface IssueEntryDetailDto {
+  id: string;
+  description: string;
+  work_package_id: number | null;
+  raised_date: string;
+  priority: Level;
+  owner_role_id: string | null;
+  owner_role_label: string | null;
+  status: IssueStatus;
+  resolution: string | null;
+  linked_risk_id: string | null;
+  is_stale_warning: boolean;
 }
 
 export type ExecutionScreen =
@@ -406,4 +475,6 @@ export type ExecutionScreen =
   | 'equipment'
   | 'other-costs'
   | 'subcontracting'
-  | 'reporting-periods';
+  | 'reporting-periods'
+  | 'risk-register'
+  | 'issue-log';

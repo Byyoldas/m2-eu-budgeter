@@ -68,6 +68,8 @@ const summary: ExecutionProjectSummaryDto = {
     gaps_detected: false,
     final_period_covers_project_end: true,
   },
+  risks: [],
+  issues: [],
 };
 
 describe('useExecutionStore', () => {
