@@ -1,2 +1,5 @@
+packages:
+  - "erc-budget"
+
 allowBuilds:
   esbuild: true

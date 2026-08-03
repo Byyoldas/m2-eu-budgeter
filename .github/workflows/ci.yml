@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  rust:
+    name: Rust workspace (fmt, clippy, test)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test --workspace
+        run: cargo test --workspace
+
+      - name: TypeScript bindings must match Rust structs (no uncommitted drift)
+        run: |
+          cargo test -p erc-core --features ts-rs
+          git diff --exit-code -- erc-core/bindings || {
+            echo "::error::erc-core/bindings/*.ts is out of date. Run 'cargo test -p erc-core --features ts-rs' locally and commit the result.";
+            exit 1;
+          }
+
+  frontend:
+    name: erc-budget frontend (test, build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm test
+        run: pnpm --filter m2-eu-budgeter test
+
+      - name: pnpm build
+        run: pnpm --filter m2-eu-budgeter build

@@ -1,0 +1,22 @@
+[package]
+name = "erc-core"
+version = "0.1.0"
+edition = "2021"
+description = "Shared domain, calculation, validation, and persistence core for the ERC Budget and ERC Execution applications"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rust_decimal = { version = "1", features = ["serde-str"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "1"
+chrono = { version = "0.4", features = ["serde"] }
+ts-rs = { version = "12", optional = true, features = ["uuid-impl"] }
+
+[dev-dependencies]
+rust_decimal_macros = "1"
+
+[features]
+# Enabled only to (re)generate TypeScript bindings: `cargo test --features ts-rs`.
+# Not part of the default build/test/clippy pipeline.
+ts-rs = ["dep:ts-rs"]

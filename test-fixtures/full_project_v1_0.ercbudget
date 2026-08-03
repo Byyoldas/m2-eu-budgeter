@@ -1,0 +1,138 @@
+{
+  "format_version": "1.0",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z",
+  "project": {
+    "id": "33333333-3333-4333-8333-333333333333",
+    "config": {
+      "project_title": "Regression Fixture — Full Project",
+      "pi_name": "Prof. Test",
+      "call_reference": "ERC-2025-CoG",
+      "duration_years": 5,
+      "work_package_count": 3,
+      "work_package_names": [null, null, null],
+      "work_package_start_months": [1, 1, 1],
+      "work_package_end_months": [60, 60, 60],
+      "default_inflation_rate_pct": "20",
+      "try_eur_rate": "50.62",
+      "indirect_cost_rate_pct": "25",
+      "rate_version_id": "from_2025_05_13",
+      "call_opening_date": null
+    },
+    "personnel_roles": [
+      {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "role_label": "PI",
+        "role_type": "Pi",
+        "current_monthly_salary_try": "227900",
+        "fte_fraction": "0.70",
+        "inflation_rate_pct": "20",
+        "start_month": 1,
+        "end_month": 60
+      },
+      {
+        "id": "55555555-5555-4555-8555-555555555555",
+        "role_label": "PostDoc-1",
+        "role_type": "PostDoc",
+        "current_monthly_salary_try": "151860",
+        "fte_fraction": "1.0",
+        "inflation_rate_pct": "20",
+        "start_month": 13,
+        "end_month": 60
+      },
+      {
+        "id": "66666666-6666-4666-8666-666666666666",
+        "role_label": "Expert-1",
+        "role_type": "Expert",
+        "current_monthly_salary_try": "138000",
+        "fte_fraction": "0.40",
+        "inflation_rate_pct": "20",
+        "start_month": 1,
+        "end_month": 12
+      }
+    ],
+    "equipment_items": [
+      {
+        "id": "77777777-7777-4777-8777-777777777777",
+        "name": "Laptop",
+        "purchase_cost_eur": "2500",
+        "useful_lifetime_months": 48,
+        "grant_usage_pct": "100",
+        "grant_usage_months": 55,
+        "work_package_id": 1
+      },
+      {
+        "id": "88888888-8888-4888-8888-888888888888",
+        "name": "Audio Recorder",
+        "purchase_cost_eur": "60",
+        "useful_lifetime_months": 60,
+        "grant_usage_pct": "100",
+        "grant_usage_months": 36,
+        "work_package_id": 1
+      }
+    ],
+    "trips": [
+      {
+        "id": "99999999-9999-4999-8999-999999999999",
+        "name": "India Fieldwork",
+        "trip_type": {
+          "Itemized": {
+            "destination_country_code": "IN",
+            "one_way_distance_km": 5800,
+            "number_of_nights": 4,
+            "number_of_days": 5,
+            "domestic_transport_per_instance_eur": "340"
+          }
+        },
+        "number_of_instances": 4,
+        "work_package_ids": [1]
+      },
+      {
+        "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "name": "Vienna Conference",
+        "trip_type": {
+          "Itemized": {
+            "destination_country_code": "AT",
+            "one_way_distance_km": 2100,
+            "number_of_nights": 5,
+            "number_of_days": 6,
+            "domestic_transport_per_instance_eur": "0"
+          }
+        },
+        "number_of_instances": 3,
+        "work_package_ids": [2]
+      }
+    ],
+    "other_cost_items": [
+      {
+        "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "name": "Publications Year 3",
+        "amount_eur": "5000",
+        "is_cfs_item": false,
+        "notes": null,
+        "work_package_ids": [1]
+      },
+      {
+        "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "name": "Publications Year 4",
+        "amount_eur": "5000",
+        "is_cfs_item": false,
+        "notes": null,
+        "work_package_ids": [1]
+      },
+      {
+        "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "name": "Publications Year 5",
+        "amount_eur": "5000",
+        "is_cfs_item": false,
+        "notes": null,
+        "work_package_ids": [1]
+      }
+    ],
+    "subcontracting": {
+      "amount_eur": "0",
+      "work_package_id": 1
+    },
+    "cfs_warning_dismissed": false
+  }
+}

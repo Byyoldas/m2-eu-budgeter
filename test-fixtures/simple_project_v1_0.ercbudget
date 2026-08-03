@@ -1,0 +1,43 @@
+{
+  "format_version": "1.0",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z",
+  "project": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "config": {
+      "project_title": "Regression Fixture — One Year Project",
+      "pi_name": "PI",
+      "call_reference": "ERC-2025-CoG",
+      "duration_years": 1,
+      "work_package_count": 1,
+      "work_package_names": [null],
+      "work_package_start_months": [1],
+      "work_package_end_months": [12],
+      "default_inflation_rate_pct": "0",
+      "try_eur_rate": "50",
+      "indirect_cost_rate_pct": "25",
+      "rate_version_id": "from_2025_05_13",
+      "call_opening_date": null
+    },
+    "personnel_roles": [
+      {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "role_label": "PI",
+        "role_type": "Pi",
+        "current_monthly_salary_try": "50000",
+        "fte_fraction": "1.0",
+        "inflation_rate_pct": "0",
+        "start_month": 1,
+        "end_month": 12
+      }
+    ],
+    "equipment_items": [],
+    "trips": [],
+    "other_cost_items": [],
+    "subcontracting": {
+      "amount_eur": "0",
+      "work_package_id": 1
+    },
+    "cfs_warning_dismissed": false
+  }
+}

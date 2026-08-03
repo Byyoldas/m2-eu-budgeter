@@ -3,8 +3,8 @@ dist/
 target/
 .DS_Store
 *.log
-src-tauri/gen/
-src-tauri/target/
+**/src-tauri/gen/
+**/src-tauri/target/
 .env
 .env.local
 windows-build-output/
