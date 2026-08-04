@@ -8,6 +8,7 @@
 import { useExecutionStore } from './store/executionStore';
 import { useAutoSave } from './hooks/useAutoSave';
 import { Sidebar } from './components/Sidebar';
+import { NotificationTray } from './components/NotificationTray';
 import { Welcome } from './screens/Welcome';
 import { Dashboard } from './screens/Dashboard';
 import { Personnel } from './screens/Personnel';
@@ -69,6 +70,7 @@ export function App() {
     <div className="app-shell">
       <Sidebar />
       <main className="content-area">{renderScreen()}</main>
+      <NotificationTray />
     </div>
   );
 }

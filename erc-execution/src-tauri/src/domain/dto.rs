@@ -8,7 +8,8 @@
 
 use super::enums::{
     AmendmentStatus, AmendmentType, DeliverableStatus, DeliverableType, DisseminationLevel,
-    EntryStatus, IssueStatus, Level, MilestoneStatus, ReportingPeriodStatus, RiskStatus, WpStatus,
+    EntryStatus, IssueStatus, Level, MilestoneStatus, NavigationTarget, ReportingPeriodStatus,
+    RiskStatus, WarningSeverity, WpStatus,
 };
 use erc_core::domain::dto::{BudgetSummaryDto, CfsStatus};
 use erc_core::domain::entities::RoleType;
@@ -64,6 +65,7 @@ pub struct ExecutionProjectSummaryDto {
     pub reporting_period_coverage: ReportingPeriodCoverageDto,
     pub risks: Vec<RiskEntryDetailDto>,
     pub issues: Vec<IssueEntryDetailDto>,
+    pub warnings: Vec<WarningDto>,
 }
 
 /// UI-convenience projections of read-only Budget App entities, just enough
@@ -539,4 +541,19 @@ pub struct IssueEntryDetailDto {
     pub linked_risk_id: Option<Uuid>,
     /// BR-IS-02: `High` priority, still `Open`, raised more than 14 days ago.
     pub is_stale_warning: bool,
+}
+
+// ─── M-21: Notifications & Warnings ─────────────────────────────────────────────
+
+/// One entry in the persistent notification tray (M-21, codes W-01 through
+/// W-12). Assembled by `engines::notification_engine::evaluate_warnings`,
+/// which re-derives every warning from data already on `ExecutionProjectSummaryDto`
+/// rather than introducing a second source of truth.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WarningDto {
+    pub code: String,
+    pub severity: WarningSeverity,
+    pub message: String,
+    pub navigation_target: NavigationTarget,
+    pub entity_id: Option<Uuid>,
 }

@@ -153,3 +153,52 @@ th, td {
   margin: 0;
   text-align: right;
 }
+
+.notification-tray {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+}
+
+.notification-tray-toggle {
+  background: #111827;
+  border: 1px solid #334155;
+  color: inherit;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.notification-tray-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: 360px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.notification-tray-empty {
+  margin: 0.5rem;
+  color: #94a3b8;
+}
+
+.notification-tray-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notification-tray-panel li {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.notification-tray-panel li:hover {
+  background: #1e293b;
+}

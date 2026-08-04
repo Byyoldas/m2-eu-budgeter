@@ -70,6 +70,7 @@ const summary: ExecutionProjectSummaryDto = {
   },
   risks: [],
   issues: [],
+  warnings: [],
 };
 
 describe('useExecutionStore', () => {

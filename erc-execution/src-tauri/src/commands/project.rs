@@ -12,7 +12,10 @@ use crate::domain::dto::{
     TripExecutionDetailDto, WorkPackageExecutionDetailDto,
 };
 use crate::domain::execution_entities::ExecutionData;
-use crate::engines::{financial_engine, progress_engine, reporting_period_engine, risk_engine};
+use crate::engines::notification_engine::WarningContext;
+use crate::engines::{
+    financial_engine, notification_engine, progress_engine, reporting_period_engine, risk_engine,
+};
 use crate::error::AppError;
 use crate::persistence;
 use crate::AppState;
@@ -489,6 +492,21 @@ pub(crate) fn build_summary(
         })
         .collect();
 
+    let warnings = notification_engine::evaluate_warnings(&WarningContext {
+        project,
+        exec,
+        actuals: &actuals,
+        deliverables: &deliverables,
+        milestones: &milestones,
+        work_packages: &work_packages,
+        reporting_periods: &reporting_periods,
+        risks: &risks,
+        issues: &issues,
+        trip_executions: &trip_executions,
+        current_project_month,
+        today,
+    });
+
     Ok(ExecutionProjectSummaryDto {
         project_info: ProjectInfoDto {
             project_title: project.config.project_title.clone(),
@@ -518,6 +536,7 @@ pub(crate) fn build_summary(
         reporting_period_coverage,
         risks,
         issues,
+        warnings,
     })
 }
 

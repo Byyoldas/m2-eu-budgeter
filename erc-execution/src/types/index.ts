@@ -394,6 +394,7 @@ export interface ExecutionProjectSummaryDto {
   reporting_period_coverage: ReportingPeriodCoverageDto;
   risks: RiskEntryDetailDto[];
   issues: IssueEntryDetailDto[];
+  warnings: WarningDto[];
 }
 
 // ─── M-12: Risk Register ────────────────────────────────────────────────────────
@@ -461,6 +462,30 @@ export interface IssueEntryDetailDto {
   resolution: string | null;
   linked_risk_id: string | null;
   is_stale_warning: boolean;
+}
+
+// ─── M-21: Notifications & Warnings ─────────────────────────────────────────────
+
+export type WarningSeverity = 'Error' | 'Warning' | 'Info';
+
+export type NavigationTarget =
+  | 'Dashboard'
+  | 'WorkPackages'
+  | 'Deliverables'
+  | 'Milestones'
+  | 'Personnel'
+  | 'Travel'
+  | 'Equipment'
+  | 'ReportingPeriods'
+  | 'RiskRegister'
+  | 'IssueLog';
+
+export interface WarningDto {
+  code: string;
+  severity: WarningSeverity;
+  message: string;
+  navigation_target: NavigationTarget;
+  entity_id: string | null;
 }
 
 export type ExecutionScreen =

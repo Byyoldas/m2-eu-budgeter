@@ -131,3 +131,29 @@ pub enum IssueStatus {
     Open,
     Closed,
 }
+
+/// M-21 warning severity (`execution-requirements.md` §M-21's Warning Types
+/// table).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WarningSeverity {
+    Error,
+    Warning,
+    Info,
+}
+
+/// M-21: which screen a warning's notification-tray entry navigates to when
+/// clicked. Frontend maps each variant to an `ExecutionScreen` value (see
+/// `src/components/NotificationTray.tsx`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NavigationTarget {
+    Dashboard,
+    WorkPackages,
+    Deliverables,
+    Milestones,
+    Personnel,
+    Travel,
+    Equipment,
+    ReportingPeriods,
+    RiskRegister,
+    IssueLog,
+}
