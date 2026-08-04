@@ -23,6 +23,7 @@ import { Subcontracting } from './screens/Subcontracting';
 import { ReportingPeriods } from './screens/ReportingPeriods';
 import { RiskRegister } from './screens/RiskRegister';
 import { IssueLog } from './screens/IssueLog';
+import { ReportsExport } from './screens/ReportsExport';
 import './App.css';
 
 export function App() {
@@ -60,6 +61,8 @@ export function App() {
         return <RiskRegister />;
       case 'issue-log':
         return <IssueLog />;
+      case 'reports-export':
+        return <ReportsExport />;
       case 'dashboard':
       default:
         return <Dashboard />;

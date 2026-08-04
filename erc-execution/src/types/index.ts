@@ -502,4 +502,5 @@ export type ExecutionScreen =
   | 'subcontracting'
   | 'reporting-periods'
   | 'risk-register'
-  | 'issue-log';
+  | 'issue-log'
+  | 'reports-export';
