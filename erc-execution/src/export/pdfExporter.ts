@@ -26,13 +26,19 @@ export function buildProjectStatusReportHtml(summary: ExecutionProjectSummaryDto
   const wpRows = work_packages
     .map(
       (wp) =>
-        `<tr><td>WP${wp.work_package_id}</td><td>${escapeHtml(wp.work_package_name ?? '')}</td><td>${wp.status}</td><td>${n(wp.planned_eur).toLocaleString()}</td><td>${n(wp.actual_eur).toLocaleString()}</td></tr>`,
+        `<tr><td>WP${wp.work_package_id}</td><td>${escapeHtml(wp.work_package_name ?? '')}</td><td>${escapeHtml(wp.status)}</td><td>${n(wp.planned_eur).toLocaleString()}</td><td>${n(wp.actual_eur).toLocaleString()}</td></tr>`,
     )
     .join('');
 
+  // Every interpolated field is escaped here even when a field is also
+  // validated server-side on write (e.g. submission_deadline must parse as
+  // an ISO date) — that validation isn't re-checked on load, so a
+  // hand-edited .ercbudget file could otherwise smuggle markup into this
+  // manually-built HTML document (unlike the rest of the app, which renders
+  // through React's own auto-escaping).
   const upcomingDeadlines = reporting_periods
     .filter((p) => p.status !== 'Submitted' && p.submission_deadline)
-    .map((p) => `<li>P${p.period_number}: ${p.submission_deadline}</li>`)
+    .map((p) => `<li>P${p.period_number}: ${escapeHtml(p.submission_deadline ?? '')}</li>`)
     .join('');
 
   const warningRows = warnings

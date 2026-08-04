@@ -158,4 +158,27 @@ describe('buildProjectStatusReportHtml', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });
+
+  it('escapes HTML in a reporting period submission_deadline (defense-in-depth against a hand-edited file)', () => {
+    const html = buildProjectStatusReportHtml(
+      baseSummary({
+        reporting_periods: [
+          {
+            id: 'p1',
+            period_number: 1,
+            start_month: 1,
+            end_month: 18,
+            submission_deadline: '<img src=x onerror=alert(1)>',
+            technical_report_submitted: false,
+            financial_report_submitted: false,
+            status: 'Open',
+            deliverables_due: 0,
+            deliverables_submitted: 0,
+          },
+        ],
+      }),
+    );
+    expect(html).not.toContain('<img src=x onerror=alert(1)>');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+  });
 });
