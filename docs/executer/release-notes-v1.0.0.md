@@ -111,13 +111,14 @@ feature was implemented — noted here rather than silently shipped:
 
 An internal security review (`security-review-m3.md`) confirmed no
 credentials are stored anywhere and the app makes no network calls in
-normal operation. One latent gap — an unused, unconfigured auto-update
-capability inherited from the Budget App's project template — is flagged
-for a decision before release: either remove it (recommended, since it's
-currently dead weight) or wire up a real update pipeline. A minor
+normal operation. The webview now runs under an explicit Content-Security
+Policy (previously unset), enforcing "no network calls" as a platform-level
+guarantee rather than just a code-review convention. A minor
 cross-site-scripting gap in the PDF export (exploitable only via a
 hand-edited project file, not remotely) was found and fixed during the
-review.
+review. The auto-update capability (dependency + permission) is kept
+in place, unregistered, for a future real update pipeline — it makes no
+network calls today.
 
 ## Upgrade Instructions
 

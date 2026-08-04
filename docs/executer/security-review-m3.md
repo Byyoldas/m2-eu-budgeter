@@ -33,21 +33,13 @@ usage exists anywhere in the app's own code. All IPC is local
 (Tauri's own command bridge), and all persistence is local disk I/O via
 `std::fs`.
 
-**Gap:** `tauri-plugin-updater` is a declared dependency, registered as a
-plugin in `lib.rs`, and granted `updater:default` in
-`capabilities/default.json` — but `tauri.conf.json` has no
-`plugins.updater` block (no `pubkey`/`endpoints`), and nothing in the
-frontend ever calls `check()`. This was a deliberate deferral flagged
+**Gap:** `tauri-plugin-updater` is a declared dependency and granted
+`updater:default` in `capabilities/default.json`, but `tauri.conf.json`
+has no `plugins.updater` block (no `pubkey`/`endpoints`), and nothing in
+the frontend ever calls `check()`. This was a deliberate deferral flagged
 during Sprint E1 ("erc-budget's real signing key would be wrong here;
 revisit in Milestone 3" — see project memory) and Milestone 3 is that
 revisit.
-
-Today this is inert: no endpoint is configured, so even if something
-called `check()` it would fail rather than reach out. But the capability
-is fully wired (permission + plugin + dependency), which is a weaker
-guarantee than "no network calls" as a structural property of the app —
-it currently holds only because nothing invokes it, not because the app
-is incapable of it.
 
 **Decision (2026-08-04): keep it**, for a future real update pipeline —
 same tradeoff erc-budget already made and ships with. The app will make
@@ -55,6 +47,28 @@ network calls to check for updates once that pipeline exists (its own
 signing key, its own endpoint); it doesn't yet, so this remains inert for
 now. "No network calls" describes v1.0's actual behavior, not a permanent
 architectural constraint — that's now explicit rather than assumed.
+
+**Correction, found the same day while verifying the CSP change below:**
+the assumption that this gap was merely "inert" was wrong. Registering
+`tauri_plugin_updater::Builder::new().build()` with no `plugins.updater`
+config block doesn't degrade gracefully — it panics at startup, because
+the plugin's `Config::pubkey` field is mandatory (not `Option`), and
+Tauri passes the plugin config through as-is with no default fallback
+when the block is absent. This was invisible to every prior sprint's
+verification because `cargo build`/`cargo test` never exercise plugin
+initialization — only actually launching the app via `tauri dev` does,
+and that had never been done before this pass. In other words: erc-execution
+could not launch, in dev or release builds, at any point before this fix.
+
+**Fix:** the `.plugin(tauri_plugin_updater::Builder::new().build())` call
+was removed from `lib.rs` (see comment there). The Cargo dependency and
+the `updater:default` capability grant are left in place — the "keep it"
+decision above still stands as a decision about the *dependency and
+permission scaffolding*, since a real update pipeline can re-register the
+plugin with a real `pubkey`/`endpoints` block when it's built. What
+changed is that the plugin is no longer *registered* against an empty
+config in the meantime, since that combination doesn't produce "inert," it
+produces "the app doesn't start."
 
 **Minor, same shape:** `shell:default` is also granted but never invoked
 by the frontend (`tauri_plugin_shell::init()` is registered but nothing
@@ -64,16 +78,48 @@ command execution — but it's unused capability all the same, and could be
 dropped for the same least-privilege reasoning if there's no near-term
 plan to open external links from the app.
 
-### 3. CSP is `null`
+### 3. CSP is `null` — fixed
 
-`tauri.conf.json`'s `app.security.csp` is `null`, meaning the webview
-enforces no Content-Security-Policy. This is inherited from erc-budget's
-own config (same value there), so it's not a regression introduced by
+`tauri.conf.json`'s `app.security.csp` was `null`, meaning the webview
+enforced no Content-Security-Policy. This was inherited from erc-budget's
+own config (same value there), so it wasn't a regression introduced by
 erc-execution — but for an app whose stated design goal is zero network
-calls, an explicit CSP (e.g. `default-src 'self'; connect-src 'none'`)
-would enforce that as a platform-level guarantee rather than relying on
-code review to keep catching accidental additions. Recommend setting one
-before v1.0, independent of the updater decision above.
+calls, an explicit CSP enforces that as a platform-level guarantee rather
+than relying on code review to keep catching accidental additions.
+
+**Fixed (2026-08-04):**
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost;
+object-src 'none'; base-uri 'self'; form-action 'none'
+```
+
+Notes on the non-default directives:
+- `style-src 'unsafe-inline'` is required for the `<style>` block in
+  `index.html` and for React's inline `style` props, both used throughout
+  the app; there's no nonce/hash infrastructure to replace it with.
+- `connect-src ... ipc: http://ipc.localhost` is Tauri v2's standard
+  requirement for the webview-to-Rust IPC bridge to function at all.
+- `object-src 'none'`, `base-uri 'self'`, and `form-action 'none'` are
+  added hardening with no functional cost: nothing in the app uses
+  plugins/embeds, injects a `<base>` tag, or needs a form to actually
+  submit anywhere (every `<form onSubmit>` in the codebase calls
+  `preventDefault()` and handles the submission in JS).
+- No `img-src` beyond `'self' data:` was needed — the app loads no
+  external or `asset://`-protocol images.
+
+Verified by running the actual Tauri dev build (`pnpm tauri dev`) end to
+end after the change: it compiles, launches, and the Rust process runs
+without panicking or emitting Tauri-side CSP-configuration errors. This
+also incidentally caught the updater startup crash in finding 2 above,
+since that's the first time in the project's history this app was
+actually launched rather than just compiled/unit-tested. Full in-webview
+console verification (confirming zero CSP-violation warnings in the
+DevTools console for style/IPC) still needs a human to check once, since
+this environment has no way to attach to a native Tauri window's
+DevTools console — flagged for the user to glance at during their first
+local test pass.
 
 ### 4. Injection: one real gap, found and fixed
 
@@ -122,12 +168,12 @@ denied. This is the correct least-privilege state and needs no change.
 | # | Finding | Severity | Status |
 |---|---|---|---|
 | 1 | Credentials | — | No findings |
-| 2 | Updater plugin fully wired but unconfigured/unused | Low (latent, not active) | **Decided: keep**, for a future update pipeline |
+| 2 | Updater plugin registered with no config crashed the app at startup | High (app didn't launch) | **Fixed**: plugin unregistered; dependency/capability kept for a future pipeline |
 | 2b | Shell plugin permission granted but unused | Info | Optional cleanup, not actioned |
-| 3 | CSP is `null` | Low | Still open — recommend fixing before v1.0 |
+| 3 | CSP is `null` | Low | **Fixed** — explicit policy set |
 | 4 | PDF export missed escaping two fields | Medium (self-XSS via tampered file, no remote vector) | **Fixed** this session |
 | 5 | File I/O / path handling | — | No findings |
 
 Everything is fixable without touching business logic or the module
-catalogue — this was a scoped audit, not a rewrite. Item 3 (CSP) is still
-an open config-only decision; item 4 is already committed-ready.
+catalogue — this was a scoped audit, not a rewrite. All findings are now
+either resolved or explicitly accepted (2b).

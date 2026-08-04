@@ -38,7 +38,13 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        // tauri_plugin_updater is intentionally NOT registered yet: it requires a
+        // `plugins.updater` block (pubkey + endpoints) in tauri.conf.json, which doesn't
+        // exist yet (no real update pipeline for this app). Registering it without that
+        // config panics at startup (Config::pubkey is a mandatory, non-Option field) --
+        // discovered by actually running `tauri dev`, since `cargo build`/`cargo test`
+        // never exercise plugin init. The dependency and `updater:default` capability
+        // stay in place; re-add this registration once a real pubkey/endpoint exists.
         .plugin(tauri_plugin_process::init())
         .manage(AppState {
             project: Mutex::new(None),
