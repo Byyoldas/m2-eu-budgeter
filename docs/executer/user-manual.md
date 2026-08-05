@@ -1,4 +1,4 @@
-# ERC Execution — User Manual (v1.0.0)
+# ERC Execution — User Manual (v1.1.0)
 
 ERC Execution tracks the day-to-day running of a Horizon Europe project
 against the budget you planned in the **Budget Application** (erc-budget).
@@ -119,6 +119,21 @@ Two linked sections:
   salary costs (inflation-adjusted, currency-converted). The app also
   checks that the total approved across everyone doesn't exceed the
   month's planned total by more than 10%.
+
+**Time Declaration export.** Each person in the Roster has a **Time
+Declaration** button, which downloads the official EU Grants "Declaration
+of Days Worked on a Project" form — one filled `.docx` per calendar year
+they have person-month records in (bundled as a `.zip` if more than one
+year). Only the person's name and the year are filled in automatically.
+**Days Worked, Work Packages worked on, and both signature blocks are
+left blank for you to complete by hand** — the app has no reliable way to
+convert its tracked FTE fractions into an actual day count (that depends
+on your institution's own working-day length, which isn't recorded here),
+and it doesn't track which Work Packages a person worked on in a given
+month. Project acronym, project number, participant name, and type of
+personnel are also blank, since none of those are tracked in the app.
+This export needs the project's call opening date to be set in the Budget
+App — without it, project months can't be mapped to real calendar years.
 
 ## 7. Milestones
 
