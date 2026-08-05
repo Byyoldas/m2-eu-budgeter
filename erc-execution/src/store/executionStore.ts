@@ -34,7 +34,7 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
   error: null,
   setSummary: (summary, projectPath) =>
     set({ summary, projectPath, activeScreen: 'dashboard', error: null }),
-  updateSummary: (summary) => set({ summary, error: null }),
+  updateSummary: (summary) => set({ summary, error: null, isDirty: true }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
   setActiveScreen: (activeScreen) => set({ activeScreen }),

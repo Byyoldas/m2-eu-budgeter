@@ -82,10 +82,25 @@ pub fn save_execution(
     Ok(())
 }
 
-/// Auto-save to a `.ercbudget.autosave` sibling (called after every mutation).
+/// Auto-save to a hidden `.<name>.ercbudget.autosave` sibling (called after
+/// every mutation). Dot-prefixed so it doesn't clutter Finder/Explorer next
+/// to the real project file — this is a recovery shadow copy, not something
+/// the user is meant to see or open directly.
 pub fn auto_save(project: &Project, exec: &ExecutionData, path: &Path) -> Result<(), AppError> {
-    let auto_path = path.with_extension("ercbudget.autosave");
+    let auto_path = hidden_autosave_path(path);
     save_execution(project, exec, &auto_path)
+}
+
+fn hidden_autosave_path(path: &Path) -> std::path::PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("project.ercbudget");
+    let hidden_name = format!(".{file_name}.autosave");
+    match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent.join(hidden_name),
+        _ => std::path::PathBuf::from(hidden_name),
+    }
 }
 
 fn read_created_at(path: &Path) -> Result<String, AppError> {
@@ -423,15 +438,43 @@ mod tests {
     }
 
     #[test]
-    fn test_auto_save_writes_autosave_sibling() {
+    fn test_auto_save_writes_a_hidden_autosave_sibling() {
         let project = make_project();
         let exec = ExecutionData::default();
         let path = temp_path("autosave-base");
-        let autosave_path = path.with_extension("ercbudget.autosave");
+        let autosave_path = hidden_autosave_path(&path);
         std::fs::remove_file(&autosave_path).ok();
 
         auto_save(&project, &exec, &path).unwrap();
         assert!(autosave_path.exists());
+        // Dot-prefixed, so it doesn't show up in Finder/Explorer next to
+        // the real project file.
+        assert!(autosave_path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with('.'));
         std::fs::remove_file(&autosave_path).ok();
+    }
+
+    #[test]
+    fn test_hidden_autosave_path_dot_prefixes_the_filename_in_the_same_directory() {
+        let path = std::path::PathBuf::from("/Users/pi/Desktop/my-project.ercbudget");
+        let hidden = hidden_autosave_path(&path);
+        assert_eq!(
+            hidden,
+            std::path::PathBuf::from("/Users/pi/Desktop/.my-project.ercbudget.autosave")
+        );
+    }
+
+    #[test]
+    fn test_hidden_autosave_path_handles_a_bare_filename_with_no_parent_dir() {
+        let path = std::path::PathBuf::from("my-project.ercbudget");
+        let hidden = hidden_autosave_path(&path);
+        assert_eq!(
+            hidden,
+            std::path::PathBuf::from(".my-project.ercbudget.autosave")
+        );
     }
 }

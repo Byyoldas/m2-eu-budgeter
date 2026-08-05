@@ -9,6 +9,7 @@
 
 import { useExecutionStore } from '../store/executionStore';
 import type { ExecutionScreen } from '../types';
+import { SaveButton } from './SaveButton';
 
 const MODULES: { label: string; screen: ExecutionScreen | null }[] = [
   { label: 'Dashboard', screen: 'dashboard' },
@@ -34,6 +35,7 @@ export function Sidebar() {
   return (
     <nav className="sidebar">
       <div className="sidebar-title">ERC Execution</div>
+      <SaveButton />
       <ul>
         {MODULES.map((m) => (
           <li

@@ -30,14 +30,19 @@ right where you left off.
 
 ### Saving
 
-Everything you do saves automatically — there is no Save button and
-nothing to lose by closing the window. Two mechanisms cover you:
+Everything you do saves automatically — there's nothing to lose by
+closing the window. Three mechanisms cover you:
 
 - Every single change (adding a person, editing a milestone, deleting a
-  risk, ...) is written to disk immediately, both to your original file
-  and to a `.ercbudget.autosave` sibling file.
-- A secondary 2-second-debounced save also runs from the UI side as a
-  belt-and-suspenders backstop.
+  risk, ...) is written immediately to a hidden `.autosave` sibling file
+  next to your project (see below) — a safety copy, not the file you
+  opened.
+- A secondary 2-second-debounced save also runs from the UI side, writing
+  back to your actual named `.ercbudget` file.
+- A **Save** button in the sidebar lets you save on demand instead of
+  waiting for the debounce. It's greyed out when there's nothing to save;
+  the line underneath it reads "All changes saved," "Unsaved changes," or
+  (if a save fails) the actual error, rather than failing silently.
 
 ## 2. Navigation
 
@@ -283,6 +288,7 @@ conflict-resolution mechanism if two people open the same file
 simultaneously on different machines.
 
 **What if the app crashes mid-edit?**
-Check for a `<yourfile>.ercbudget.autosave` file next to your original —
-every mutation is written there immediately, so you should lose at most
-the change that was in flight.
+Check for a hidden `.<yourfile>.ercbudget.autosave` file next to your
+original (dot-prefixed, so it won't show in Finder/Explorer unless you
+enable hidden files) — every mutation is written there immediately, so
+you should lose at most the change that was in flight.

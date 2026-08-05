@@ -114,4 +114,15 @@ describe('useExecutionStore', () => {
     expect(state.summary).toEqual(summary);
     expect(state.activeScreen).toBe('personnel');
   });
+
+  it('updateSummary marks the project dirty (a mutation just happened)', () => {
+    useExecutionStore.getState().updateSummary(summary);
+    expect(useExecutionStore.getState().isDirty).toBe(true);
+  });
+
+  it('setDirty(false) clears the dirty flag (used after a successful save)', () => {
+    useExecutionStore.getState().updateSummary(summary);
+    useExecutionStore.getState().setDirty(false);
+    expect(useExecutionStore.getState().isDirty).toBe(false);
+  });
 });

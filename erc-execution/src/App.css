@@ -32,6 +32,36 @@
   margin-bottom: 1rem;
 }
 
+.save-control {
+  margin-bottom: 1rem;
+}
+
+.save-control button {
+  width: 100%;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: inherit;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.save-control button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.save-status {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.save-status-error {
+  color: #f87171;
+}
+
 .sidebar ul {
   list-style: none;
   margin: 0;

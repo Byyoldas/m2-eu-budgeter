@@ -153,9 +153,9 @@ dialog (`@tauri-apps/plugin-dialog`, invoked once in `Welcome.tsx`) — the
 user explicitly picks the file via their own OS session, so this isn't a
 path-traversal issue in the usual server-boundary sense; the user already
 has whatever filesystem access their OS account grants. The autosave path
-is derived from the already-opened file's own path
-(`.with_extension("ercbudget.autosave")`), not from any additional input.
-No findings here.
+is derived from the already-opened file's own path (dot-prefixed sibling,
+`hidden_autosave_path()`, added 2026-08-05 so the shadow copy doesn't
+clutter Finder/Explorer), not from any additional input. No findings here.
 
 The frontend never imports `@tauri-apps/plugin-fs` directly — all file
 I/O happens in Rust command handlers, not via IPC-exposed fs commands —
