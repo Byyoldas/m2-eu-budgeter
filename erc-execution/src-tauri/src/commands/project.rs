@@ -96,6 +96,11 @@ pub(crate) fn build_summary(
                         .ok()
                         .flatten()
                 });
+            let (calendar_year, calendar_month) = progress_engine::project_month_to_calendar(
+                project.config.call_opening_date.as_deref(),
+                record.project_month,
+            )
+            .unzip();
             PersonMonthDetailDto {
                 id: record.id,
                 person_id: record.person_id,
@@ -103,6 +108,8 @@ pub(crate) fn build_summary(
                 reported_months: record.reported_months,
                 approved_months: record.approved_months,
                 salary_cost_estimate_eur: estimate,
+                calendar_year,
+                calendar_month,
             }
         })
         .collect();

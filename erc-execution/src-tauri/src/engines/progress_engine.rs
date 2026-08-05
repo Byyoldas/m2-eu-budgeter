@@ -41,6 +41,23 @@ fn derive_current_project_month_at(project: &Project, today: chrono::NaiveDate) 
     (months_elapsed + 1).clamp(1, max_month as i32) as u32
 }
 
+/// Maps a 1-indexed `project_month` to a real (calendar_year, calendar_month
+/// 1-12) pair, for exports (e.g. the EU time-declaration template) that are
+/// organised by calendar year rather than project month. `None` when
+/// `call_opening_date` is unset or unparseable — same "skip until a calendar
+/// anchor is known" precedent as `derive_current_project_month`.
+pub fn project_month_to_calendar(
+    call_opening_date: Option<&str>,
+    project_month: u32,
+) -> Option<(i32, u32)> {
+    let base = chrono::NaiveDate::parse_from_str(call_opening_date?, "%Y-%m-%d").ok()?;
+    let total_months_0indexed =
+        base.year() * 12 + (base.month() as i32 - 1) + (project_month as i32 - 1);
+    let year = total_months_0indexed.div_euclid(12);
+    let month = total_months_0indexed.rem_euclid(12) + 1;
+    Some((year, month as u32))
+}
+
 /// BR-MS-01. Pure display-time overlay — never mutates the stored `status`.
 pub fn derive_milestone_status(
     milestone: &Milestone,
@@ -270,6 +287,44 @@ mod tests {
         let today = chrono::NaiveDate::from_ymd_opt(2030, 1, 1).unwrap();
         // duration_years = 3 → max month 36.
         assert_eq!(derive_current_project_month_at(&project, today), 36);
+    }
+
+    // ─── project_month_to_calendar ─────────────────────────────────────
+
+    #[test]
+    fn test_calendar_none_when_call_opening_date_unset() {
+        assert_eq!(project_month_to_calendar(None, 1), None);
+    }
+
+    #[test]
+    fn test_calendar_none_when_call_opening_date_unparseable() {
+        assert_eq!(project_month_to_calendar(Some("not-a-date"), 1), None);
+    }
+
+    #[test]
+    fn test_calendar_project_month_1_is_the_opening_month() {
+        assert_eq!(
+            project_month_to_calendar(Some("2026-03-15"), 1),
+            Some((2026, 3))
+        );
+    }
+
+    #[test]
+    fn test_calendar_advances_across_a_year_boundary() {
+        // Opens March 2026; project month 11 = January 2027.
+        assert_eq!(
+            project_month_to_calendar(Some("2026-03-15"), 11),
+            Some((2027, 1))
+        );
+    }
+
+    #[test]
+    fn test_calendar_handles_multi_year_spans() {
+        // Opens June 2024; project month 25 = June 2026 (2 full years later).
+        assert_eq!(
+            project_month_to_calendar(Some("2024-06-01"), 25),
+            Some((2026, 6))
+        );
     }
 
     // ─── derive_milestone_status ────────────────────────────────────────

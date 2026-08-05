@@ -274,8 +274,8 @@ describe('excelExporter', () => {
         },
       ],
       person_months: [
-        { id: 'pm1', person_id: 'p1', project_month: 5, reported_months: '1', approved_months: '1', salary_cost_estimate_eur: '1000' },
-        { id: 'pm2', person_id: 'p1', project_month: 25, reported_months: '1', approved_months: null, salary_cost_estimate_eur: null },
+        { id: 'pm1', person_id: 'p1', project_month: 5, reported_months: '1', approved_months: '1', salary_cost_estimate_eur: '1000', calendar_year: 2026, calendar_month: 5 },
+        { id: 'pm2', person_id: 'p1', project_month: 25, reported_months: '1', approved_months: null, salary_cost_estimate_eur: null, calendar_year: 2028, calendar_month: 1 },
       ],
       reporting_periods: [
         {

@@ -8,6 +8,7 @@ import { useExecutionStore } from '../store/executionStore';
 import { useExecutionMutation } from '../hooks/useExecutionMutation';
 import { addActualCostEntry, deleteActualCostEntry } from '../ipc/commands';
 import type { ActualCostEntryInputDto } from '../types';
+import { fmtEur } from '../utils/currency';
 
 const emptyForm: ActualCostEntryInputDto = {
   linked_entity_id: null,
@@ -54,7 +55,7 @@ export function OtherCosts() {
             <tr key={entry.id}>
               <td>{entry.linked_entity_name ?? 'Unbudgeted'}</td>
               <td>{entry.description}</td>
-              <td>{entry.amount_eur}</td>
+              <td>{fmtEur(entry.amount_eur)}</td>
               <td>{entry.incurred_date}</td>
               <td>{entry.status}</td>
               <td>
@@ -81,7 +82,7 @@ export function OtherCosts() {
           <option value="">Unbudgeted item</option>
           {planned_other_costs.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.name} (planned {item.amount_eur} EUR)
+              {item.name} (planned {fmtEur(item.amount_eur)})
             </option>
           ))}
         </select>

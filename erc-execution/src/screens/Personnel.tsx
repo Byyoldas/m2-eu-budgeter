@@ -7,7 +7,9 @@ import { useState } from 'react';
 import { useExecutionStore } from '../store/executionStore';
 import { useExecutionMutation } from '../hooks/useExecutionMutation';
 import { addPerson, deletePerson, addPersonMonthRecord, deletePersonMonthRecord } from '../ipc/commands';
-import type { PersonInputDto, PersonMonthRecordInputDto } from '../types';
+import type { PersonDetailDto, PersonInputDto, PersonMonthRecordInputDto } from '../types';
+import { fmtEur } from '../utils/currency';
+import { exportTimeDeclarations } from '../export/timeDeclarationExporter';
 
 const emptyPerson: PersonInputDto = {
   full_name: '',
@@ -31,6 +33,7 @@ export function Personnel() {
   const { run, error, isSubmitting } = useExecutionMutation();
   const [personForm, setPersonForm] = useState(emptyPerson);
   const [recordForm, setRecordForm] = useState(emptyRecord);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   if (!summary) return null;
   const { personnel_roles, persons, person_months } = summary;
@@ -47,10 +50,20 @@ export function Personnel() {
     if (ok) setRecordForm(emptyRecord);
   };
 
+  const exportTimeDeclaration = async (person: PersonDetailDto) => {
+    setExportError(null);
+    try {
+      await exportTimeDeclarations(person, person_months);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Time declaration export failed.');
+    }
+  };
+
   return (
     <div className="screen">
       <h1>Personnel &amp; Person-Month Tracking</h1>
       {error && <p className="error-banner">{error}</p>}
+      {exportError && <p className="error-banner">{exportError}</p>}
 
       <section>
         <h2>Roster</h2>
@@ -72,6 +85,9 @@ export function Personnel() {
                 <td>{p.actual_start_date}</td>
                 <td>{p.actual_end_date ?? '—'}</td>
                 <td>
+                  <button onClick={() => exportTimeDeclaration(p)} disabled={isSubmitting}>
+                    Time Declaration
+                  </button>
                   <button onClick={() => run(() => deletePerson(p.id))} disabled={isSubmitting}>
                     Delete
                   </button>
@@ -134,7 +150,7 @@ export function Personnel() {
                   <td>{r.project_month}</td>
                   <td>{r.reported_months}</td>
                   <td>{r.approved_months ?? '—'}</td>
-                  <td>{r.salary_cost_estimate_eur ?? '—'}</td>
+                  <td>{r.salary_cost_estimate_eur != null ? fmtEur(r.salary_cost_estimate_eur) : '—'}</td>
                   <td>
                     <button
                       onClick={() => run(() => deletePersonMonthRecord(r.id))}

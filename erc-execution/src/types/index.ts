@@ -86,6 +86,8 @@ export interface PersonMonthDetailDto {
   reported_months: string;
   approved_months: string | null;
   salary_cost_estimate_eur: string | null;
+  calendar_year: number | null;
+  calendar_month: number | null;
 }
 
 // ─── M-04: Work Package Management ────────────────────────────────────────────

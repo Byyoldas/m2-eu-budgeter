@@ -143,6 +143,12 @@ pub struct PersonMonthDetailDto {
     /// record has an `approved_months` value.
     #[serde(default, with = "rust_decimal::serde::str_option")]
     pub salary_cost_estimate_eur: Option<Decimal>,
+    /// Derived from `project_month` + `ProjectConfig.call_opening_date`.
+    /// `None` when the call opening date is unset (see
+    /// `progress_engine::project_month_to_calendar`).
+    pub calendar_year: Option<i32>,
+    /// 1-12. See `calendar_year`.
+    pub calendar_month: Option<u32>,
 }
 
 // ─── Work Package Management (M-04) ───────────────────────────────────────────

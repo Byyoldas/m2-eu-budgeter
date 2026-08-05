@@ -9,6 +9,7 @@ import { useExecutionStore } from '../store/executionStore';
 import { useExecutionMutation } from '../hooks/useExecutionMutation';
 import { setWorkPackageExecution } from '../ipc/commands';
 import type { WorkPackageExecutionInputDto } from '../types';
+import { fmtEur } from '../utils/currency';
 
 const STATUS_LABELS: Record<string, string> = {
   NotStarted: 'Not Started',
@@ -60,9 +61,9 @@ export function WorkPackages() {
               <dt>Leader</dt>
               <dd>{wp.leader_role_label ?? '—'}</dd>
               <dt>Planned (EUR)</dt>
-              <dd>{wp.planned_eur}</dd>
+              <dd>{fmtEur(wp.planned_eur)}</dd>
               <dt>Actual (EUR, personnel only)</dt>
-              <dd>{wp.actual_eur}</dd>
+              <dd>{fmtEur(wp.actual_eur)}</dd>
               {wp.notes && (
                 <>
                   <dt>Notes</dt>

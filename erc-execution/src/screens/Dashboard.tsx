@@ -6,6 +6,7 @@
  */
 
 import { useExecutionStore } from '../store/executionStore';
+import { fmtEur } from '../utils/currency';
 
 const CFS_LABELS: Record<string, string> = {
   NOT_REQUIRED: 'Not Required',
@@ -50,38 +51,38 @@ export function Dashboard() {
           <tbody>
             <tr>
               <td>A (Personnel)</td>
-              <td>{planned.category_a_total}</td>
-              <td>{actuals.a_actual}</td>
+              <td>{fmtEur(planned.category_a_total)}</td>
+              <td>{fmtEur(actuals.a_actual)}</td>
               <td>{actuals.category_a_overrun && <span className="warning-banner">&gt;15%</span>}</td>
             </tr>
             <tr>
               <td>B (Subcontracting)</td>
-              <td>{planned.category_b_total}</td>
-              <td>{actuals.b_actual}</td>
+              <td>{fmtEur(planned.category_b_total)}</td>
+              <td>{fmtEur(actuals.b_actual)}</td>
               <td>{actuals.category_b_overrun && <span className="warning-banner">&gt;15%</span>}</td>
             </tr>
             <tr>
               <td>C1 (Travel)</td>
-              <td>{planned.category_c1_total}</td>
-              <td>{actuals.c1_actual}</td>
+              <td>{fmtEur(planned.category_c1_total)}</td>
+              <td>{fmtEur(actuals.c1_actual)}</td>
               <td>{actuals.category_c1_overrun && <span className="warning-banner">&gt;15%</span>}</td>
             </tr>
             <tr>
               <td>C2 (Equipment)</td>
-              <td>{planned.category_c2_total}</td>
-              <td>{actuals.c2_actual}</td>
+              <td>{fmtEur(planned.category_c2_total)}</td>
+              <td>{fmtEur(actuals.c2_actual)}</td>
               <td>{actuals.category_c2_overrun && <span className="warning-banner">&gt;15%</span>}</td>
             </tr>
             <tr>
               <td>C3 (Other)</td>
-              <td>{planned.category_c3_total}</td>
-              <td>{actuals.c3_actual}</td>
+              <td>{fmtEur(planned.category_c3_total)}</td>
+              <td>{fmtEur(actuals.c3_actual)}</td>
               <td>{actuals.category_c3_overrun && <span className="warning-banner">&gt;15%</span>}</td>
             </tr>
             <tr>
               <td>E (Indirect)</td>
-              <td>{planned.category_e_total}</td>
-              <td>{actuals.e_actual}</td>
+              <td>{fmtEur(planned.category_e_total)}</td>
+              <td>{fmtEur(actuals.e_actual)}</td>
               <td />
             </tr>
             <tr>
@@ -89,10 +90,10 @@ export function Dashboard() {
                 <strong>Requested EU Contribution</strong>
               </td>
               <td>
-                <strong>{planned.requested_eu_contribution}</strong>
+                <strong>{fmtEur(planned.requested_eu_contribution)}</strong>
               </td>
               <td>
-                <strong>{actuals.requested_eu_contribution_actual}</strong>
+                <strong>{fmtEur(actuals.requested_eu_contribution_actual)}</strong>
               </td>
               <td />
             </tr>

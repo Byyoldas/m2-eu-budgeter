@@ -8,6 +8,7 @@ import { useExecutionStore } from '../store/executionStore';
 import { useExecutionMutation } from '../hooks/useExecutionMutation';
 import { addEquipmentProcurement, deleteEquipmentProcurement } from '../ipc/commands';
 import type { EquipmentProcurementInputDto } from '../types';
+import { fmtEur } from '../utils/currency';
 
 const emptyForm: EquipmentProcurementInputDto = {
   equipment_item_id: '',
@@ -51,9 +52,9 @@ export function Equipment() {
             <tr key={ep.id}>
               <td>{ep.equipment_item_name}</td>
               <td>{ep.purchase_date}</td>
-              <td>{ep.actual_purchase_cost_eur}</td>
+              <td>{fmtEur(ep.actual_purchase_cost_eur)}</td>
               <td>{ep.delivery_confirmed ? 'Yes' : 'Pending'}</td>
-              <td>{ep.actual_eligible_depreciation_eur ?? '—'}</td>
+              <td>{ep.actual_eligible_depreciation_eur != null ? fmtEur(ep.actual_eligible_depreciation_eur) : '—'}</td>
               <td>
                 {ep.overspend_warning && <span className="warning-banner">&gt;10% over</span>}
                 <button
@@ -77,7 +78,7 @@ export function Equipment() {
           <option value="">Equipment item…</option>
           {planned_equipment.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.name} (planned {item.planned_cost_eur} EUR)
+              {item.name} (planned {fmtEur(item.planned_cost_eur)})
             </option>
           ))}
         </select>

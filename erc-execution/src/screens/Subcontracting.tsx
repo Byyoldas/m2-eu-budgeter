@@ -9,6 +9,7 @@ import { useExecutionStore } from '../store/executionStore';
 import { useExecutionMutation } from '../hooks/useExecutionMutation';
 import { addSubcontractingLine, deleteSubcontractingLine } from '../ipc/commands';
 import type { EntryStatus, SubcontractingLineInputDto } from '../types';
+import { fmtEur } from '../utils/currency';
 
 const emptyForm: SubcontractingLineInputDto = {
   vendor: '',
@@ -55,7 +56,7 @@ export function Subcontracting() {
             <tr key={line.id}>
               <td>{line.vendor}</td>
               <td>{line.contract_reference}</td>
-              <td>{line.amount_eur}</td>
+              <td>{fmtEur(line.amount_eur)}</td>
               <td>WP{line.work_package_id}</td>
               <td>{line.status}</td>
               <td>

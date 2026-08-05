@@ -8,6 +8,7 @@ import { useExecutionStore } from '../store/executionStore';
 import { useExecutionMutation } from '../hooks/useExecutionMutation';
 import { addTripExecution, deleteTripExecution } from '../ipc/commands';
 import type { EntryStatus, TripExecutionInputDto } from '../types';
+import { fmtEur } from '../utils/currency';
 
 const emptyForm: TripExecutionInputDto = {
   trip_id: '',
@@ -57,8 +58,8 @@ export function Travel() {
               <td>{te.instance_number}</td>
               <td>{te.traveller_name}</td>
               <td>{te.actual_travel_date}</td>
-              <td>{te.actual_cost_eur}</td>
-              <td>{te.planned_cost_per_instance_eur}</td>
+              <td>{fmtEur(te.actual_cost_eur)}</td>
+              <td>{fmtEur(te.planned_cost_per_instance_eur)}</td>
               <td>{te.status}</td>
               <td>
                 {te.overspend_warning && <span className="warning-banner">&gt;20% over</span>}
