@@ -6,8 +6,8 @@ on:
     branches: [main]
 
 jobs:
-  rust:
-    name: Rust workspace (fmt, clippy, test)
+  build-and-test:
+    name: Build and test
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +19,27 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm test (erc-budget)
+        run: pnpm --filter m2-eu-budgeter test
+
+      # tauri::generate_context!() (invoked by erc-budget/src-tauri) requires
+      # frontendDist ("../dist") to already exist, so the frontend must be
+      # built before any cargo command touches the workspace.
+      - name: pnpm build (erc-budget)
+        run: pnpm --filter m2-eu-budgeter build
 
       - name: cargo fmt --check
         run: cargo fmt --all --check
@@ -36,27 +57,3 @@ jobs:
             echo "::error::erc-core/bindings/*.ts is out of date. Run 'cargo test -p erc-core --features ts-rs' locally and commit the result.";
             exit 1;
           }
-
-  frontend:
-    name: Frontend workspaces (test, build)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: pnpm test (erc-budget)
-        run: pnpm --filter m2-eu-budgeter test
-
-      - name: pnpm build (erc-budget)
-        run: pnpm --filter m2-eu-budgeter build
