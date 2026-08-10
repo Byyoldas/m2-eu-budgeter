@@ -867,28 +867,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "erc-execution"
-version = "1.1.2"
-dependencies = [
- "chrono",
- "erc-core",
- "rust_decimal",
- "rust_decimal_macros",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-process",
- "tauri-plugin-shell",
- "tauri-plugin-updater",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

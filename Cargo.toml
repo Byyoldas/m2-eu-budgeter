@@ -2,6 +2,5 @@
 members = [
     "erc-core",
     "erc-budget/src-tauri",
-    "erc-execution/src-tauri",
 ]
 resolver = "2"

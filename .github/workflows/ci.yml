@@ -60,9 +60,3 @@ jobs:
 
       - name: pnpm build (erc-budget)
         run: pnpm --filter m2-eu-budgeter build
-
-      - name: pnpm test (erc-execution)
-        run: pnpm --filter erc-execution test
-
-      - name: pnpm build (erc-execution)
-        run: pnpm --filter erc-execution build
