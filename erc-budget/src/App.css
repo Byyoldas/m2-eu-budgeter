@@ -117,6 +117,26 @@
 .stepper-label { font-size: 13px; }
 .stepper-version { padding: 12px 16px; font-size: 10px; color: var(--text-muted); flex: 0 0 auto; }
 
+/* ─── Save Status ──────────────────────────────────────────────────────────── */
+.save-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.save-status-btn { align-self: flex-start; }
+.save-status-label { font-size: 12px; color: var(--text-secondary); }
+.save-status-label--error { color: var(--danger); }
+.save-status-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ─── Sidebar Dashboard ────────────────────────────────────────────────────── */
 .sidebar-dashboard {
   flex: 0 1 auto;

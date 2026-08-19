@@ -4,7 +4,7 @@
  */
 
 import { open } from '@tauri-apps/plugin-dialog';
-import { loadProject } from '../ipc/commands';
+import { loadProject, getProjectConfig } from '../ipc/commands';
 import { useProjectStore } from '../store/projectStore';
 import { useUpdaterStore } from '../store/updaterStore';
 import type { AppError } from '../types';
@@ -15,7 +15,9 @@ interface WelcomeProps {
 
 export function Welcome({ onNewProject }: WelcomeProps) {
   const setSummary = useProjectStore((s) => s.setSummary);
+  const setProjectConfig = useProjectStore((s) => s.setProjectConfig);
   const setProjectPath = useProjectStore((s) => s.setProjectPath);
+  const setDirty = useProjectStore((s) => s.setDirty);
   const setScreen = useProjectStore((s) => s.setScreen);
   const setGlobalError = useProjectStore((s) => s.setGlobalError);
   const setLoading = useProjectStore((s) => s.setLoading);
@@ -34,8 +36,11 @@ export function Welcome({ onNewProject }: WelcomeProps) {
 
       setLoading(true);
       const summary = await loadProject(path);
+      const config = await getProjectConfig();
       setSummary(summary);
+      setProjectConfig(config);
       setProjectPath(path);
+      setDirty(false);
       setScreen('review-export');
     } catch (err) {
       setGlobalError(err as AppError);

@@ -15,6 +15,7 @@ import { CategoryTotalsPanel } from './components/CategoryTotalsPanel';
 import { BudgetWpBarChart } from './components/BudgetWpBarChart';
 import { BudgetRingChart } from './components/BudgetRingChart';
 import { UpdateChecker } from './components/UpdateChecker';
+import { SaveStatus } from './components/SaveStatus';
 
 import { Welcome } from './screens/Welcome';
 import { ProjectSetup } from './screens/ProjectSetup';
@@ -46,8 +47,8 @@ export function App() {
   const setRateVersions = useProjectStore((s) => s.setRateVersions);
   const summary = useProjectStore((s) => s.summary);
 
-  // Activate auto-save
-  useAutoSave();
+  // Activate auto-save; also drives the sidebar's manual Save button
+  const { saveNow } = useAutoSave();
 
   // Load rate versions on startup (they're lightweight)
   useEffect(() => {
@@ -81,6 +82,7 @@ export function App() {
       {/* Left sidebar: stepper + live totals */}
       <aside className="app-sidebar">
         <ProgressStepper onNavigate={goTo} />
+        {summary && <SaveStatus onSaveNow={saveNow} />}
         <div className="sidebar-dashboard">
           <CategoryTotalsPanel />
           {summary && (

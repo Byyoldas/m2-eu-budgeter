@@ -52,6 +52,11 @@ interface ProjectStore {
   isDirty: boolean;
   setDirty: (dirty: boolean) => void;
 
+  // Save status (drives the sidebar Save button/status line)
+  saveStatus: 'idle' | 'saving' | 'error';
+  saveError: string | null;
+  setSaveStatus: (status: 'idle' | 'saving' | 'error', error?: string | null) => void;
+
   // Reset to initial state (e.g. when creating a new project)
   reset: () => void;
 }
@@ -66,6 +71,8 @@ const initialState = {
   isLoading: false,
   globalError: null,
   isDirty: false,
+  saveStatus: 'idle' as const,
+  saveError: null,
 };
 
 export const useProjectStore = create<ProjectStore>((set) => ({
@@ -80,6 +87,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setGlobalError: (globalError) => set({ globalError }),
   setDirty: (isDirty) => set({ isDirty }),
+  setSaveStatus: (saveStatus, saveError = null) => set({ saveStatus, saveError }),
   reset: () => set(initialState),
 }));
 

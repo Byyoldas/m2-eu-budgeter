@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { budgetSettingsSchema, type BudgetSettingsFormData } from '../validators/schemas';
 import { useProjectStore } from '../store/projectStore';
-import { createProject, updateProjectConfig, getRateVersions } from '../ipc/commands';
+import { createProject, updateProjectConfig, getRateVersions, getProjectPath } from '../ipc/commands';
 import { useBudgetSummary } from '../hooks/useBudgetSummary';
 
 interface BudgetSettingsProps {
@@ -23,6 +23,8 @@ export function BudgetSettings({ onNext, onBack }: BudgetSettingsProps) {
   const rateVersions = useProjectStore((s) => s.rateVersions);
   const setRateVersions = useProjectStore((s) => s.setRateVersions);
   const summary = useProjectStore((s) => s.summary);
+  const setProjectPath = useProjectStore((s) => s.setProjectPath);
+  const setDirty = useProjectStore((s) => s.setDirty);
   const { mutate, isLoading, fieldErrors } = useBudgetSummary();
 
   useEffect(() => {
@@ -62,9 +64,19 @@ export function BudgetSettings({ onNext, onBack }: BudgetSettingsProps) {
 
     setProjectConfig(fullConfig);
 
-    const command = summary ? updateProjectConfig : createProject;
+    const isCreating = !summary;
+    const command = isCreating ? createProject : updateProjectConfig;
     const result = await mutate(() => command(fullConfig));
-    if (result) onNext();
+    if (result) {
+      // create_project assigns a default Desktop path on the backend;
+      // mirror it into the store so the Save button/status and auto-save
+      // know a file already exists.
+      if (isCreating) {
+        getProjectPath().then(setProjectPath).catch(() => {});
+        setDirty(false);
+      }
+      onNext();
+    }
   };
 
   return (

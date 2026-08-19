@@ -49,6 +49,8 @@ pub fn run() {
             commands::project::save_project,
             commands::project::save_project_as,
             commands::project::get_project,
+            commands::project::get_project_config,
+            commands::project::get_project_path,
             commands::project::get_rate_versions,
             commands::project::get_countries,
             // Personnel

@@ -39,6 +39,12 @@ export const saveProjectAs = (path: string): Promise<void> =>
 export const getProject = (): Promise<BudgetSummaryDto> =>
   invoke('get_project');
 
+export const getProjectConfig = (): Promise<ProjectConfigInput> =>
+  invoke('get_project_config');
+
+export const getProjectPath = (): Promise<string | null> =>
+  invoke('get_project_path');
+
 export const getRateVersions = (): Promise<RateVersionSummary[]> =>
   invoke('get_rate_versions');
 
