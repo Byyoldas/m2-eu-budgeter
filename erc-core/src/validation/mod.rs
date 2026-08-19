@@ -352,11 +352,11 @@ pub fn validate_project_config(dto: &crate::domain::dto::ProjectConfigDto) -> Re
         ));
     }
 
-    if dto.work_package_count < 1 || dto.work_package_count > 10 {
+    if dto.work_package_count < 1 || dto.work_package_count > 20 {
         errors.push(FieldError::new(
             "work_package_count",
             "INVALID_WP_COUNT",
-            "Number of Work Packages must be between 1 and 10.",
+            "Number of Work Packages must be between 1 and 20.",
         ));
     }
 
@@ -1001,9 +1001,9 @@ mod tests {
     }
 
     #[test]
-    fn test_val_cfg_wp_count_11_returns_error() {
+    fn test_val_cfg_wp_count_21_returns_error() {
         let mut dto = make_config_dto(5);
-        dto.work_package_count = 11;
+        dto.work_package_count = 21;
         assert!(has_field_error(
             &validate_project_config(&dto),
             "work_package_count",

@@ -39,7 +39,7 @@ export const projectSetupSchema = z.object({
     .number()
     .int()
     .min(1, 'At least 1 Work Package required.')
-    .max(10, 'Maximum 10 Work Packages.'),
+    .max(20, 'Maximum 20 Work Packages.'),
   call_opening_date: z.string().nullable().optional(),
 });
 

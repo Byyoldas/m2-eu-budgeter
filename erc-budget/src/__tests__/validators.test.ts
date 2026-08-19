@@ -75,14 +75,14 @@ describe('projectSetupSchema', () => {
     expect(r.success).toBe(false);
   });
 
-  it('rejects work_package_count = 11 (> max 10)', () => {
-    const r = projectSetupSchema.safeParse({ ...validData, work_package_count: 11 });
+  it('rejects work_package_count = 21 (> max 20)', () => {
+    const r = projectSetupSchema.safeParse({ ...validData, work_package_count: 21 });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues[0].message).toMatch(/10/);
+    if (!r.success) expect(r.error.issues[0].message).toMatch(/20/);
   });
 
-  it('accepts work_package_count = 10 (maximum)', () => {
-    expect(projectSetupSchema.safeParse({ ...validData, work_package_count: 10 }).success).toBe(true);
+  it('accepts work_package_count = 20 (maximum)', () => {
+    expect(projectSetupSchema.safeParse({ ...validData, work_package_count: 20 }).success).toBe(true);
   });
 
   it('coerces string duration_years to number', () => {

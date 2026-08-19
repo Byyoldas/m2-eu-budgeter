@@ -161,7 +161,7 @@ export function ProjectSetup({ onNext }: ProjectSetupProps) {
                 id="work_package_count"
                 type="number"
                 min={1}
-                max={10}
+                max={20}
                 className={`form-input${errors.work_package_count ? ' form-input--error' : ''}`}
                 {...register('work_package_count', { valueAsNumber: true })}
               />
