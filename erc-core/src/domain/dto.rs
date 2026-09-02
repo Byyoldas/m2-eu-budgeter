@@ -38,6 +38,8 @@ pub struct ProjectConfigDto {
     pub indirect_cost_rate_pct: Decimal,
     pub rate_version_id: String,
     pub call_opening_date: Option<String>,
+    #[serde(default)]
+    pub project_start_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

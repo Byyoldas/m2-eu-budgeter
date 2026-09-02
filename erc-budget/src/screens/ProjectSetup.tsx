@@ -30,6 +30,7 @@ export function ProjectSetup({ onNext }: ProjectSetupProps) {
       duration_years: projectConfig?.duration_years ?? 5,
       work_package_count: projectConfig?.work_package_count ?? 3,
       call_opening_date: projectConfig?.call_opening_date ?? '',
+      project_start_date: projectConfig?.project_start_date ?? '',
     },
   });
 
@@ -62,6 +63,7 @@ export function ProjectSetup({ onNext }: ProjectSetupProps) {
       indirect_cost_rate_pct: projectConfig?.indirect_cost_rate_pct ?? '25',
       rate_version_id: projectConfig?.rate_version_id ?? 'from_2025_05_13',
       call_opening_date: data.call_opening_date || null,
+      project_start_date: data.project_start_date || null,
     });
     onNext();
   };
@@ -131,6 +133,21 @@ export function ProjectSetup({ onNext }: ProjectSetupProps) {
             />
             <span className="form-hint">
               Used to select the correct EU travel rate version automatically.
+            </span>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="project_start_date" className="form-label">Project Start Date</label>
+            <input
+              id="project_start_date"
+              type="date"
+              className="form-input"
+              {...register('project_start_date')}
+            />
+            <span className="form-hint">
+              When the Grant Agreement takes effect — usually later than the
+              Call Opening Date above. This is what "Month 1" actually
+              refers to in the Execution app's progress tracking.
             </span>
           </div>
         </div>

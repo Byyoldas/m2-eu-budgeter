@@ -489,6 +489,7 @@ mod tests {
             indirect_cost_rate_pct: dec!(25),
             rate_version_id: "v_from_2025_05_13".to_string(),
             call_opening_date: None,
+            project_start_date: None,
         }
     }
 

@@ -90,6 +90,7 @@ const config: ProjectConfigInput = {
   indirect_cost_rate_pct: '25',
   rate_version_id: 'v_from_2025_05_13',
   call_opening_date: null,
+  project_start_date: null,
 };
 
 describe('exportToExcel', () => {

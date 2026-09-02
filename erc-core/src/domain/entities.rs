@@ -88,8 +88,20 @@ pub struct ProjectConfig {
     /// ID of the EU travel rate version to apply.
     /// Tied to the ERC call opening date.
     pub rate_version_id: String,
-    /// Date the call was published (ISO 8601 date string, for display).
+    /// Date the call was published (ISO 8601 date string, for display). This
+    /// is an administrative EC-calendar fact used only to pick the right
+    /// `rate_version_id` -- it is NOT the project's own start date, which is
+    /// usually months or years later (after evaluation and Grant Agreement
+    /// signature). See `project_start_date` for that.
     pub call_opening_date: Option<String>,
+    /// The project's actual official start date (ISO 8601 date string) --
+    /// when the Grant Agreement takes effect and "Month 1" truly begins.
+    /// `None` until set; execution/progress tracking (current project
+    /// month, calendar-year mapping for reporting) falls back to Month 1
+    /// when unset, the same precedent as every other calendar-anchored
+    /// calculation in this codebase.
+    #[serde(default)]
+    pub project_start_date: Option<String>,
 }
 
 impl ProjectConfig {
@@ -285,6 +297,7 @@ mod tests {
             indirect_cost_rate_pct: Decimal::ZERO,
             rate_version_id: "from_2025_05_13".to_string(),
             call_opening_date: None,
+            project_start_date: None,
         }
     }
 

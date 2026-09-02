@@ -163,6 +163,7 @@ fn make_sample_project() -> Project {
         indirect_cost_rate_pct: dec!(25),
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
+        project_start_date: None,
     };
 
     // PI: 227,900 TRY/month, FTE 0.70, months 1-60 (all 5 years), 20% inflation
@@ -598,6 +599,7 @@ fn test_it02_empty_project_all_zeros() {
         indirect_cost_rate_pct: dec!(25),
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
+        project_start_date: None,
     };
     let project = Project::new(config);
     let rate_data = make_rate_data();
@@ -630,6 +632,7 @@ fn test_it03_one_year_project() {
         indirect_cost_rate_pct: dec!(25),
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
+        project_start_date: None,
     };
     let pi = PersonnelRole {
         id: Uuid::new_v4(),
@@ -671,6 +674,7 @@ fn test_it04_flat_amount_trip() {
         indirect_cost_rate_pct: dec!(25),
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
+        project_start_date: None,
     };
     let flat_trip = Trip {
         id: Uuid::new_v4(),
@@ -711,6 +715,7 @@ fn test_it05_subcontracting_included_in_eligible_and_requested_excluded_from_ind
         indirect_cost_rate_pct: dec!(25),
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
+        project_start_date: None,
     };
     let mut project = Project::new(config);
     project.subcontracting = Subcontracting {
@@ -767,6 +772,7 @@ fn test_it06_personnel_wp_allocation_multi_year_multi_inflation() {
         indirect_cost_rate_pct: dec!(25),
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
+        project_start_date: None,
     };
 
     // RoleA: base 100 EUR/month (5000 TRY / 50), 10% inflation, active the

@@ -73,6 +73,7 @@ pub fn create_project(
         indirect_cost_rate_pct: config.indirect_cost_rate_pct,
         rate_version_id: config.rate_version_id,
         call_opening_date: config.call_opening_date,
+        project_start_date: config.project_start_date,
     };
 
     let project = Project::new(project_config);
@@ -223,6 +224,7 @@ fn project_config_to_dto(config: &ProjectConfig) -> ProjectConfigDto {
         indirect_cost_rate_pct: config.indirect_cost_rate_pct,
         rate_version_id: config.rate_version_id.clone(),
         call_opening_date: config.call_opening_date.clone(),
+        project_start_date: config.project_start_date.clone(),
     }
 }
 
@@ -333,6 +335,7 @@ mod default_path_tests {
             indirect_cost_rate_pct: rust_decimal_macros::dec!(25),
             rate_version_id: "from_2025_05_13".to_string(),
             call_opening_date: Some("2026-01-15".to_string()),
+            project_start_date: Some("2026-07-01".to_string()),
         };
 
         let dto = project_config_to_dto(&config);
@@ -356,5 +359,6 @@ mod default_path_tests {
         assert_eq!(dto.indirect_cost_rate_pct, config.indirect_cost_rate_pct);
         assert_eq!(dto.rate_version_id, config.rate_version_id);
         assert_eq!(dto.call_opening_date, config.call_opening_date);
+        assert_eq!(dto.project_start_date, config.project_start_date);
     }
 }

@@ -41,6 +41,7 @@ export const projectSetupSchema = z.object({
     .min(1, 'At least 1 Work Package required.')
     .max(20, 'Maximum 20 Work Packages.'),
   call_opening_date: z.string().nullable().optional(),
+  project_start_date: z.string().nullable().optional(),
 });
 
 export type ProjectSetupFormData = z.infer<typeof projectSetupSchema>;
