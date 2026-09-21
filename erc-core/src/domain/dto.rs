@@ -115,6 +115,13 @@ pub struct RoleCostLineDto {
     pub is_active: bool,
     /// Number of months (0-12) of the role's Start/End Month period that fall in this year.
     pub active_months: u8,
+    /// Person-Months for this year (active_months x fte_fraction), rounded to
+    /// 1 decimal place, standard round-half-up — matching the EU Funding &
+    /// Tenders Portal's own Person-Months convention. `annual_cost_eur` is
+    /// computed from this rounded value, not the exact fractional one.
+    #[serde(with = "rust_decimal::serde::str")]
+    #[cfg_attr(feature = "ts-rs", ts(type = "string"))]
+    pub person_months: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
     #[cfg_attr(feature = "ts-rs", ts(type = "string"))]
     pub monthly_salary_eur: Decimal,

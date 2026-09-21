@@ -113,6 +113,7 @@ pub fn calculate_budget_summary(
                 year: l.year,
                 is_active: l.is_active,
                 active_months: l.active_months,
+                person_months: l.person_months,
                 monthly_salary_eur: l.monthly_salary_eur,
                 annual_cost_eur: l.annual_cost_eur,
             })

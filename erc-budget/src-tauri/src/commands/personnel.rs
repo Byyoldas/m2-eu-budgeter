@@ -155,6 +155,7 @@ pub fn preview_role_cost(
             year: l.year,
             is_active: l.is_active,
             active_months: l.active_months,
+            person_months: l.person_months,
             monthly_salary_eur: l.monthly_salary_eur,
             annual_cost_eur: l.annual_cost_eur,
         })

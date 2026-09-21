@@ -7,4 +7,11 @@ export type RoleCostLineDto = { year: number, is_active: boolean,
 /**
  * Number of months (0-12) of the role's Start/End Month period that fall in this year.
  */
-active_months: number, monthly_salary_eur: string, annual_cost_eur: string, };
+active_months: number, 
+/**
+ * Person-Months for this year (active_months x fte_fraction), rounded to
+ * 1 decimal place, standard round-half-up — matching the EU Funding &
+ * Tenders Portal's own Person-Months convention. `annual_cost_eur` is
+ * computed from this rounded value, not the exact fractional one.
+ */
+person_months: string, monthly_salary_eur: string, annual_cost_eur: string, };

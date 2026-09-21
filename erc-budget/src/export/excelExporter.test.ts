@@ -173,7 +173,11 @@ describe('exportToExcel', () => {
           // Year 1 monthly = 100*(1.10)^1 = 110. Expect WP1=WP2=12*110/2=660.
           id: '1', role_label: 'RoleA', role_type: 'Expert',
           current_monthly_salary_try: '5000', inflation_rate_pct: '10', fte_fraction: '1.0',
-          start_month: 1, end_month: 12, cost_lines: [], total_cost_eur: '1320', wp_breakdown: [],
+          start_month: 1, end_month: 12, cost_lines: [], total_cost_eur: '1320',
+          wp_breakdown: [
+            { work_package_id: 1, amount_eur: '660' },
+            { work_package_id: 2, amount_eur: '660' },
+          ],
         },
         {
           // Active the full 2 years. Months 1-12 split 50/50 as above (660
@@ -182,7 +186,11 @@ describe('exportToExcel', () => {
           // Expect WP1=660, WP2=660+1452=2112, total=2772.
           id: '2', role_label: 'RoleB', role_type: 'Expert',
           current_monthly_salary_try: '5000', inflation_rate_pct: '10', fte_fraction: '1.0',
-          start_month: 1, end_month: 24, cost_lines: [], total_cost_eur: '2772', wp_breakdown: [],
+          start_month: 1, end_month: 24, cost_lines: [], total_cost_eur: '2772',
+          wp_breakdown: [
+            { work_package_id: 1, amount_eur: '660' },
+            { work_package_id: 2, amount_eur: '2112' },
+          ],
         },
       ],
     });
@@ -194,10 +202,13 @@ describe('exportToExcel', () => {
 
     const persSheet = wb.getWorksheet('Personnel');
     const helperSheet = wb.getWorksheet('_WPMonthHelper');
+    const yearHelperSheet = wb.getWorksheet('_WPYearHelper');
     const summarySheet = wb.getWorksheet('Budget Summary');
     expect(persSheet).toBeDefined();
     expect(helperSheet).toBeDefined();
     expect(helperSheet!.state).toBe('hidden');
+    expect(yearHelperSheet).toBeDefined();
+    expect(yearHelperSheet!.state).toBe('hidden');
 
     // WP Timelines table (rows 1-2 header, then one row per WP). Duration
     // and PM columns are formulas, checked below via HyperFormula.
@@ -224,6 +235,7 @@ describe('exportToExcel', () => {
       'Budget Summary': gridFromWorksheet(summarySheet!),
       'Personnel': gridFromWorksheet(persSheet!),
       '_WPMonthHelper': gridFromWorksheet(helperSheet!),
+      '_WPYearHelper': gridFromWorksheet(yearHelperSheet!),
     }, { licenseKey: 'gpl-v3', useArrayArithmetic: true });
     const sheetId = hf.getSheetId('Personnel')!;
     const cell = (row: number, col: number) => hf.getCellValue({ sheet: sheetId, row: row - 1, col: col - 1 });
@@ -294,13 +306,21 @@ describe('exportToExcel', () => {
           // RoleA: 100 EUR base, 10% inflation, active months 1-36 (whole project).
           id: '1', role_label: 'RoleA', role_type: 'Expert',
           current_monthly_salary_try: '5000', inflation_rate_pct: '10', fte_fraction: '1.0',
-          start_month: 1, end_month: 36, cost_lines: [], total_cost_eur: '4369.2', wp_breakdown: [],
+          start_month: 1, end_month: 36, cost_lines: [], total_cost_eur: '4369.2',
+          wp_breakdown: [
+            { work_package_id: 1, amount_eur: '2046.00' },
+            { work_package_id: 2, amount_eur: '2323.2' },
+          ],
         },
         {
           // RoleB: 160 EUR base, 25% inflation, active months 10-30.
           id: '2', role_label: 'RoleB', role_type: 'PostDoc',
           current_monthly_salary_try: '8000', inflation_rate_pct: '25', fte_fraction: '1.0',
-          start_month: 10, end_month: 30, cost_lines: [], total_cost_eur: '5475', wp_breakdown: [],
+          start_month: 10, end_month: 30, cost_lines: [], total_cost_eur: '5475',
+          wp_breakdown: [
+            { work_package_id: 1, amount_eur: '2100.0' },
+            { work_package_id: 2, amount_eur: '3375.0' },
+          ],
         },
       ],
     });
@@ -311,12 +331,14 @@ describe('exportToExcel', () => {
     await wb.xlsx.load(capturedBuffer as ArrayBuffer);
     const persSheet = wb.getWorksheet('Personnel');
     const helperSheet = wb.getWorksheet('_WPMonthHelper');
+    const yearHelperSheet = wb.getWorksheet('_WPYearHelper');
     const summarySheet = wb.getWorksheet('Budget Summary');
 
     const hf = HyperFormula.buildFromSheets({
       'Budget Summary': gridFromWorksheet(summarySheet!),
       'Personnel': gridFromWorksheet(persSheet!),
       '_WPMonthHelper': gridFromWorksheet(helperSheet!),
+      '_WPYearHelper': gridFromWorksheet(yearHelperSheet!),
     }, { licenseKey: 'gpl-v3', useArrayArithmetic: true });
     const sheetId = hf.getSheetId('Personnel')!;
     const cell = (row: number, col: number) => hf.getCellValue({ sheet: sheetId, row: row - 1, col: col - 1 });
@@ -425,6 +447,66 @@ describe('exportToExcel', () => {
     expect(persSheet!.getCell(3, 5).numFmt).toBe('0.0');
     expect(persSheet!.getCell(4, 5).numFmt).toBe('0.0');
     expect(persSheet!.getCell(5, 5).numFmt).toBe('0.0');
+  });
+
+  it('per-WP cost formulas reflect rounded-PM cost, not the unrounded month-overlap figure', async () => {
+    // Matches erc-core's test_calc_03_person_months_round_half_up /
+    // test_calc_20a_uses_rounded_pm_and_matches_calc_03_total: 3 months at
+    // FTE 0.79 = 2.37 PM raw, which rounds to 2.4 -> cost = 1000 x 2.4 =
+    // 2400, split evenly (1200/1200) across two fully-overlapping WPs. The
+    // exporter's live formulas (via _WPYearHelper's PM rounding) must
+    // evaluate to exactly this — not the unrounded 2370 (1185/1185) a plain
+    // month-overlap SUMPRODUCT without the rounding step would produce.
+    const wpConfig: ProjectConfigInput = {
+      ...config,
+      duration_years: 1,
+      work_package_count: 2,
+      work_package_names: [null, null],
+      work_package_start_months: [1, 1],
+      work_package_end_months: [3, 3],
+    };
+    const summary = makeSummary({
+      wp_budgets: [
+        { work_package_id: 1, work_package_name: null, personnel_eur: '0', equipment_eur: '0', travel_eur: '0', other_costs_eur: '0', subcontracting_eur: '0', total_eur: '0' },
+        { work_package_id: 2, work_package_name: null, personnel_eur: '0', equipment_eur: '0', travel_eur: '0', other_costs_eur: '0', subcontracting_eur: '0', total_eur: '0' },
+      ],
+      category_a_total: '2400',
+      role_detail: [
+        {
+          id: '1', role_label: 'RoundingCase', role_type: 'Expert',
+          current_monthly_salary_try: '50000', inflation_rate_pct: '0', fte_fraction: '0.79',
+          start_month: 1, end_month: 3, cost_lines: [], total_cost_eur: '2400',
+          wp_breakdown: [
+            { work_package_id: 1, amount_eur: '1200' },
+            { work_package_id: 2, amount_eur: '1200' },
+          ],
+        },
+      ],
+    });
+
+    await exportToExcel(summary, wpConfig);
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(capturedBuffer as ArrayBuffer);
+    const persSheet = wb.getWorksheet('Personnel');
+    const helperSheet = wb.getWorksheet('_WPMonthHelper');
+    const yearHelperSheet = wb.getWorksheet('_WPYearHelper');
+    const summarySheet = wb.getWorksheet('Budget Summary');
+
+    const hf = HyperFormula.buildFromSheets({
+      'Budget Summary': gridFromWorksheet(summarySheet!),
+      'Personnel': gridFromWorksheet(persSheet!),
+      '_WPMonthHelper': gridFromWorksheet(helperSheet!),
+      '_WPYearHelper': gridFromWorksheet(yearHelperSheet!),
+    }, { licenseKey: 'gpl-v3', useArrayArithmetic: true });
+    const sheetId = hf.getSheetId('Personnel')!;
+    const cell = (row: number, col: number) => hf.getCellValue({ sheet: sheetId, row: row - 1, col: col - 1 });
+
+    // Roles table: WP timeline rows 3-4, Total PM/Employment/Reconciled 5-7,
+    // blank 8, header 9, role at row 10. I=WP1, J=WP2, L=Total.
+    expect(cell(10, 9)).toBeCloseTo(1200, 6);
+    expect(cell(10, 10)).toBeCloseTo(1200, 6);
+    expect(cell(10, 12)).toBeCloseTo(2400, 6);
   });
 
   it('embeds a Gantt chart image sheet when canvas rendering succeeds', async () => {

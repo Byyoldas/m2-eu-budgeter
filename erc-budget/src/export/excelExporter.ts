@@ -9,12 +9,15 @@
  *            an inclusive Duration column, and a Person-Months column per
  *            role reconciled against each role's raw employment length) sits
  *            above the roles table (salary/inflation input cells + formula-
- *            built Base Monthly cost; per-Work-Package cost is a genuine
- *            formula — SUMPRODUCT over a hidden per-month helper sheet that
- *            replicates the backend's month-by-month WP-overlap allocation,
- *            with yearly inflation compounding applied per month — plus a
- *            formula-derived Unattributed column that reconciles against the
- *            backend's total)
+ *            built Base Monthly cost; per-Work-Package cost and the row
+ *            Total are genuine formulas driven by two hidden helper sheets:
+ *            _WPMonthHelper (month-by-month WP-overlap counts, unchanged)
+ *            and _WPYearHelper (one row per role per project year, which
+ *            reproduces CALC-03/CALC-20a's Person-Months rounding — round
+ *            each role-year's PM to 1 decimal place before pricing it —
+ *            entirely as formulas, so the sheet stays live if salary/FTE/
+ *            dates are edited) plus a formula-derived Unattributed column
+ *            that reconciles against the row's Total)
  *   Sheet 4: Equipment Detail
  *   Sheet 5: Travel Detail
  *   Sheet 6: Other Direct Costs
@@ -147,7 +150,8 @@ export async function exportToExcel(
   // can reference the right ranges before those sheets exist) ───────────────
 
   const personnelExists = summary.role_detail.length > 0;
-  const maxMonths = (config?.duration_years ?? 1) * 12;
+  const durationYears = config?.duration_years ?? 1;
+  const maxMonths = durationYears * 12;
   // Personnel sheet layout: a "WP Timelines" reference table at the top
   // (rows 1-2 + one row per WP + a 3-row PM reconciliation block), then a
   // blank row, then the roles table. The WP Timelines table now carries a
@@ -167,6 +171,12 @@ export async function exportToExcel(
   const personnelHeaderRow = personnelWpTimelineLastRow + 5;
   const personnelFirstDataRow = personnelHeaderRow + 1;
   const personnelLastRow = personnelFirstDataRow + summary.role_detail.length - 1;
+  // _WPYearHelper layout: one row per (role, project year), in role_detail
+  // order, years 1..durationYears — a role's block is always contiguous, so
+  // its Total (CALC-03) is a single SUM over a row range.
+  const yearHelperFirstRow = 2; // row 1 is the header
+  const yearHelperRowFor = (roleIdx: number, year: number) =>
+    yearHelperFirstRow + roleIdx * durationYears + (year - 1);
   const personnelFixedCols = 7; // Role, Type, Salary(TRY), Increase%, FTE, Start, End
   const personnelBaseMonthlyCol = personnelFixedCols + 1; // H
   const personnelWpStartCol = personnelBaseMonthlyCol + 1; // I
@@ -316,6 +326,54 @@ export async function exportToExcel(
       reciprocalRow.getCell(col).value = { formula: `IF(${countCellRef}=0,0,1/${countCellRef})` };
     }
 
+    // Second hidden helper sheet: one row per (role, project year). This is
+    // where CALC-03/CALC-20a's Person-Months rounding rule — round each
+    // role-year's Person-Months to 1 decimal (standard round-half-up,
+    // matching the EU Funding & Tenders Portal) *before* pricing it — is
+    // reproduced as formulas, referencing each role's own input cells on the
+    // Personnel sheet (built below) by address.
+    const yearHelperSheet = wb.addWorksheet('_WPYearHelper');
+    yearHelperSheet.state = 'hidden';
+    yearHelperSheet.addRow([
+      'Role', 'Year', 'Active Months', 'PM (rounded)', 'Salary (€)',
+      'Annual Cost — CALC-03', 'Covered PM (unrounded)', 'Covered PM (rounded)',
+      'Annual Cost from WPs — CALC-20a basis',
+    ]);
+
+    summary.role_detail.forEach((role, k) => {
+      const roleRow = personnelFirstDataRow + k;
+      const pStartCell = `Personnel!$F$${roleRow}`;
+      const pEndCell = `Personnel!$G$${roleRow}`;
+      const pFteCell = `Personnel!$E$${roleRow}`;
+      const pIncreaseCell = `Personnel!$D$${roleRow}`;
+      const pBaseMonthlyCell = `Personnel!$${colLetter(personnelBaseMonthlyCol)}$${roleRow}`;
+
+      for (let year = 1; year <= durationYears; year++) {
+        const yearStartMonth = (year - 1) * 12 + 1;
+        const yearEndMonth = year * 12;
+        const row = yearHelperSheet.addRow([role.role_label, year]);
+        const rn = row.number;
+        // Active months this year (CALC-03): overlap of [start,end] with the
+        // year's [yearStart,yearEnd] month range, clamped to >= 0.
+        row.getCell(3).value = {
+          formula: `MAX(0,MIN(${pEndCell},${yearEndMonth})-MAX(${pStartCell},${yearStartMonth})+1)`,
+        };
+        row.getCell(4).value = { formula: `ROUND(C${rn}*${pFteCell},1)` };
+        row.getCell(5).value = { formula: `${pBaseMonthlyCell}*(1+${pIncreaseCell}/100)^${year}` };
+        row.getCell(6).value = { formula: `D${rn}*E${rn}` };
+        // Covered PM (unrounded): same overlap, but restricted to months
+        // some WP actually covers (the reciprocal row is 0 for uncovered
+        // months) — this is the basis CALC-20a rounds and splits across WPs,
+        // which can be less than the role's full active-month PM above when
+        // some months fall outside every WP (see the Unattributed column).
+        row.getCell(7).value = {
+          formula: `${pFteCell}*SUMPRODUCT((${helperMonthRange}>=${pStartCell})*(${helperMonthRange}<=${pEndCell})*(${helperMonthRange}>=${yearStartMonth})*(${helperMonthRange}<=${yearEndMonth})*${helperReciprocalRange})`,
+        };
+        row.getCell(8).value = { formula: `ROUND(G${rn},1)` };
+        row.getCell(9).value = { formula: `H${rn}*E${rn}` };
+      }
+    });
+
     const persSheet = wb.addWorksheet('Personnel');
     persSheet.properties.defaultColWidth = 15;
 
@@ -416,7 +474,7 @@ export async function exportToExcel(
     const ph = persSheet.addRow(headers);
     ph.font = { bold: true };
 
-    for (const role of summary.role_detail) {
+    summary.role_detail.forEach((role, k) => {
       const row = persSheet.addRow([
         role.role_label,
         role.role_type,
@@ -433,30 +491,48 @@ export async function exportToExcel(
       row.getCell(5).numFmt = '0.00';
       const r = row.number;
       const salaryCell = `C${r}`;
-      const increaseCell = `D${r}`;
       const fteCell = `E${r}`;
       const startCell = `F${r}`;
       const endCell = `G${r}`;
-      const baseMonthlyCell = `${colLetter(personnelBaseMonthlyCol)}${r}`;
 
       row.getCell(personnelBaseMonthlyCol).value = { formula: `${salaryCell}/${tryRateCellRef}` };
 
-      // Per-WP cost: SUMPRODUCT over every project month of
-      //   [month in role's Start-End] * [month in this WP's Start-End] *
-      //   [that month's inflated salary] * [1/overlap-count that month] * FTE
-      // This mirrors allocate_personnel_cost_by_wp exactly, including the
-      // even split across WPs that are simultaneously active in a month.
+      // Per-WP cost: a genuine formula, summed year by year against
+      // _WPYearHelper so the Person-Months-rounding rule (CALC-03/CALC-20a)
+      // is honored — for each project year, this role's WP-covered PM
+      // (this WP's own month-overlap SUMPRODUCT, restricted to that year)
+      // as a share of that year's rounded, priced pool
+      // (_WPYearHelper column I). A year with no WP coverage contributes 0
+      // rather than dividing by zero.
+      const yearRoleFirstRow = yearHelperRowFor(k, 1);
+      const yearRoleLastRow = yearHelperRowFor(k, durationYears);
       wpBudgets.forEach((_wp, i) => {
         const wpTableRow = personnelWpTimelineFirstRow + i;
         const wpStartCell = `$B$${wpTableRow}`;
         const wpEndCell = `$C$${wpTableRow}`;
         const col = personnelWpStartCol + i;
-        row.getCell(col).value = {
-          formula: `SUMPRODUCT((${helperMonthRange}>=${startCell})*(${helperMonthRange}<=${endCell})*(${helperMonthRange}>=${wpStartCell})*(${helperMonthRange}<=${wpEndCell})*(${baseMonthlyCell}*(1+${increaseCell}/100)^ROUNDUP(${helperMonthRange}/12,0))*${helperReciprocalRange}*${fteCell})`,
-        };
+        const terms: string[] = [];
+        for (let year = 1; year <= durationYears; year++) {
+          const hr = yearHelperRowFor(k, year);
+          const yearStartMonth = (year - 1) * 12 + 1;
+          const yearEndMonth = year * 12;
+          const coveredPmThisWpYear =
+            `(${fteCell}*SUMPRODUCT((${helperMonthRange}>=${startCell})*(${helperMonthRange}<=${endCell})` +
+            `*(${helperMonthRange}>=${wpStartCell})*(${helperMonthRange}<=${wpEndCell})` +
+            `*(${helperMonthRange}>=${yearStartMonth})*(${helperMonthRange}<=${yearEndMonth})*${helperReciprocalRange}))`;
+          terms.push(
+            `IF(_WPYearHelper!$G$${hr}=0,0,_WPYearHelper!$I$${hr}*${coveredPmThisWpYear}/_WPYearHelper!$G$${hr})`,
+          );
+        }
+        row.getCell(col).value = { formula: terms.join('+') };
       });
 
-      row.getCell(personnelTotalCol).value = n(role.total_cost_eur);
+      // Total (€): SUM of this role's per-year CALC-03 cost (_WPYearHelper
+      // column F) — a genuine formula, independent of the WP split above,
+      // matching the backend's own role-level total.
+      row.getCell(personnelTotalCol).value = {
+        formula: `SUM(_WPYearHelper!$F$${yearRoleFirstRow}:$F$${yearRoleLastRow})`,
+      };
 
       // Any months of the role's Start/End period outside every WP timeline
       // aren't attributed to a WP bucket — surfaced here so the row still
@@ -472,7 +548,7 @@ export async function exportToExcel(
       } else {
         row.getCell(personnelUnattributedCol).value = { formula: totalCellRef };
       }
-    }
+    });
 
     persSheet.getColumn(3).numFmt = '#,##0.00';
     for (let col = personnelBaseMonthlyCol; col <= personnelTotalCol; col++) {

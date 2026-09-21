@@ -5,12 +5,26 @@
 //! Converts year-specific projected salaries to annual grant costs
 //! using FTE fraction and a Start Month/End Month charging period, prorating
 //! by the number of months of that period that fall in each project year.
+//!
+//! Cost is driven by **Person-Months rounded to 1 decimal place** (standard
+//! round-half-up — a second decimal of 5 or higher rounds the first decimal
+//! up), matching the EU Funding & Tenders Portal's own Person-Months
+//! convention: the portal itself computes requested cost as PM × unit rate
+//! using the *rounded* PM, not the exact fractional value, so this app must
+//! round at the same point to reproduce the same requested amount.
 
 use crate::calculation::salary_projection::SalaryProjection;
 use crate::error::{calc_error, AppError};
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, RoundingStrategy};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+/// Round a Person-Months figure to 1 decimal place, standard round-half-up
+/// (e.g. 2.37 -> 2.4, 2.34 -> 2.3), matching the EU Funding & Tenders
+/// Portal's Person-Months display and the rate at which it computes cost.
+pub fn round_person_months(pm: Decimal) -> Decimal {
+    pm.round_dp_with_strategy(1, RoundingStrategy::MidpointAwayFromZero)
+}
 
 // ─── Output Types ─────────────────────────────────────────────────────────────
 
@@ -22,6 +36,11 @@ pub struct PersonnelCostLine {
     /// Number of months (0–12) of the role's Start/End Month period that fall
     /// within this project year.
     pub active_months: u8,
+    /// Person-Months for this year (`active_months × fte_fraction`), rounded
+    /// to 1 decimal place — this, not the exact fractional value, is what
+    /// `annual_cost_eur` is actually computed from.
+    #[serde(with = "rust_decimal::serde::str")]
+    pub person_months: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
     pub monthly_salary_eur: Decimal,
     #[serde(with = "rust_decimal::serde::str")]
@@ -105,24 +124,27 @@ pub fn calculate_personnel_cost_lines(
             0
         };
         let is_active = active_months > 0;
-        let annual_cost = if is_active {
-            projection.projected_monthly_eur * Decimal::from(active_months) * fte_fraction
+        let person_months = if is_active {
+            round_person_months(Decimal::from(active_months) * fte_fraction)
         } else {
             Decimal::ZERO
         };
+        let annual_cost = projection.projected_monthly_eur * person_months;
 
-        // Post-condition: active years must have positive cost.
-        if is_active && annual_cost <= Decimal::ZERO {
+        // Post-condition: inactive years must have zero Person-Months and cost.
+        // (An active year can legitimately round to 0.0 PM — and so €0 — only
+        // for a vanishingly small FTE fraction on a single-month period; that
+        // matches what the portal itself would report, not a bug.)
+        if !is_active && (person_months != Decimal::ZERO || annual_cost != Decimal::ZERO) {
             return Err(calc_error(
                 "INTERNAL_CALC_ERROR",
-                "Annual cost for an active year is zero or negative. This is a bug.",
+                "Person-Months or cost for an inactive year is non-zero. This is a bug.",
             ));
         }
-        // Post-condition: inactive years must have zero cost.
-        if !is_active && annual_cost != Decimal::ZERO {
+        if annual_cost < Decimal::ZERO {
             return Err(calc_error(
                 "INTERNAL_CALC_ERROR",
-                "Annual cost for an inactive year is non-zero. This is a bug.",
+                "Annual cost is negative. This is a bug.",
             ));
         }
 
@@ -130,6 +152,7 @@ pub fn calculate_personnel_cost_lines(
             year: projection.year,
             is_active,
             active_months,
+            person_months,
             monthly_salary_eur: projection.projected_monthly_eur,
             annual_cost_eur: annual_cost,
         });
@@ -206,17 +229,14 @@ pub fn allocate_personnel_cost_by_wp(
     end_month: u32,
     work_packages: &[(u8, u32, u32)],
 ) -> Result<Vec<WpCostAmount>, AppError> {
-    let mut totals: BTreeMap<u8, Decimal> = BTreeMap::new();
+    // Pass 1: each WP's exact (unrounded) Person-Months share per year, via
+    // the same month-by-month reciprocal split as before — in PM units, not
+    // money yet, so rounding can happen once per year (matching CALC-03)
+    // rather than independently per WP.
+    let mut year_wp_pm: BTreeMap<u8, BTreeMap<u8, Decimal>> = BTreeMap::new();
 
     for month in start_month..=end_month {
         let year = ((month - 1) / 12 + 1) as u8;
-        let monthly_eur = salary_projections
-            .iter()
-            .find(|p| p.year == year)
-            .map(|p| p.projected_monthly_eur)
-            .unwrap_or(Decimal::ZERO);
-        let month_cost = monthly_eur * fte_fraction;
-
         let containing: Vec<u8> = work_packages
             .iter()
             .filter(|&&(_, s, e)| month >= s && month <= e)
@@ -225,9 +245,49 @@ pub fn allocate_personnel_cost_by_wp(
         if containing.is_empty() {
             continue;
         }
-        let share = month_cost / Decimal::from(containing.len() as u32);
+        let month_pm_share = fte_fraction / Decimal::from(containing.len() as u32);
+        let year_entry = year_wp_pm.entry(year).or_default();
         for wp_id in containing {
-            *totals.entry(wp_id).or_insert(Decimal::ZERO) += share;
+            *year_entry.entry(wp_id).or_insert(Decimal::ZERO) += month_pm_share;
+        }
+    }
+
+    // Pass 2: round each year's total (WP-covered) Person-Months the same
+    // way CALC-03 does, turn that into the year's annual cost, then split
+    // that exact rounded amount across WPs in proportion to each WP's
+    // unrounded PM share — so the split always sums to precisely the
+    // rounded total, with no per-WP rounding drift.
+    //
+    // Every WP but the last in a year gets its proportional share directly;
+    // the last gets the exact remainder instead of its own division. A ratio
+    // like 4/12 has no terminating decimal representation, so computing
+    // every WP's share independently can leak a sub-cent residual that
+    // makes the parts not sum exactly back to annual_cost — giving the
+    // last WP the remainder guarantees they always do.
+    let mut totals: BTreeMap<u8, Decimal> = BTreeMap::new();
+    for (year, wp_pm) in &year_wp_pm {
+        let total_pm: Decimal = wp_pm.values().sum();
+        if total_pm.is_zero() {
+            continue;
+        }
+        let monthly_eur = salary_projections
+            .iter()
+            .find(|p| p.year == *year)
+            .map(|p| p.projected_monthly_eur)
+            .unwrap_or(Decimal::ZERO);
+        let annual_cost = monthly_eur * round_person_months(total_pm);
+
+        let mut remaining = annual_cost;
+        let wp_count = wp_pm.len();
+        for (i, (&wp_id, &pm)) in wp_pm.iter().enumerate() {
+            let amount = if i + 1 == wp_count {
+                remaining
+            } else {
+                let share = annual_cost * pm / total_pm;
+                remaining -= share;
+                share
+            };
+            *totals.entry(wp_id).or_insert(Decimal::ZERO) += amount;
         }
     }
 
@@ -366,6 +426,52 @@ mod tests {
         assert!(lines[2].is_active);
     }
 
+    // ── Person-Months rounding (matches the EU Funding & Tenders Portal) ──
+
+    #[test]
+    fn test_calc_03_person_months_round_half_up() {
+        // 3 active months at FTE 0.79 = 2.37 PM exactly -> rounds to 2.4,
+        // and cost is computed from the *rounded* PM, not 2.37.
+        let projections = make_projections(&[(1, "1000")]);
+        let lines = calculate_personnel_cost_lines(&projections, dec!(0.79), 1, 3).unwrap();
+        assert_eq!(lines[0].active_months, 3);
+        assert_eq!(lines[0].person_months, dec!(2.4));
+        assert_eq!(lines[0].annual_cost_eur, dec!(1000) * dec!(2.4));
+        // Not the unrounded figure.
+        assert_ne!(lines[0].annual_cost_eur, dec!(1000) * dec!(2.37));
+    }
+
+    #[test]
+    fn test_calc_03_person_months_exact_half_rounds_up() {
+        // 2 months at FTE 0.225 = 0.45 PM exactly -> the second decimal is
+        // exactly 5, which must round the first decimal *up* (to 0.5), not
+        // down and not to even.
+        let projections = make_projections(&[(1, "1000")]);
+        let lines = calculate_personnel_cost_lines(&projections, dec!(0.225), 1, 2).unwrap();
+        assert_eq!(lines[0].person_months, dec!(0.5));
+    }
+
+    #[test]
+    fn test_calc_03_person_months_below_half_rounds_down() {
+        // 3 months at FTE 0.78 = 2.34 PM exactly.
+        let projections = make_projections(&[(1, "1000")]);
+        let lines = calculate_personnel_cost_lines(&projections, dec!(0.78), 1, 3).unwrap();
+        // 3 x 0.78 = 2.34 -> rounds down to 2.3.
+        assert_eq!(lines[0].person_months, dec!(2.3));
+    }
+
+    #[test]
+    fn test_calc_03_tiny_fte_can_round_to_zero_pm_without_erroring() {
+        // A pathologically small FTE on a single active month can
+        // legitimately round to 0.0 PM (and so €0) -- that's what the
+        // portal would show too, not an internal calculation bug.
+        let projections = make_projections(&[(1, "1000")]);
+        let lines = calculate_personnel_cost_lines(&projections, dec!(0.01), 1, 1).unwrap();
+        assert!(lines[0].is_active);
+        assert_eq!(lines[0].person_months, Decimal::ZERO);
+        assert_eq!(lines[0].annual_cost_eur, Decimal::ZERO);
+    }
+
     // ── CALC-04 tests ──
 
     #[test]
@@ -375,6 +481,7 @@ mod tests {
                 year: 1,
                 is_active: true,
                 active_months: 12,
+                person_months: dec!(12),
                 monthly_salary_eur: dec!(5000),
                 annual_cost_eur: dec!(42000),
             },
@@ -382,6 +489,7 @@ mod tests {
                 year: 2,
                 is_active: true,
                 active_months: 12,
+                person_months: dec!(12),
                 monthly_salary_eur: dec!(6000),
                 annual_cost_eur: dec!(50400),
             },
@@ -391,6 +499,7 @@ mod tests {
                 year: 1,
                 is_active: false,
                 active_months: 0,
+                person_months: Decimal::ZERO,
                 monthly_salary_eur: dec!(3000),
                 annual_cost_eur: Decimal::ZERO,
             },
@@ -398,6 +507,7 @@ mod tests {
                 year: 2,
                 is_active: true,
                 active_months: 12,
+                person_months: dec!(12),
                 monthly_salary_eur: dec!(3450),
                 annual_cost_eur: dec!(41400),
             },
@@ -427,6 +537,7 @@ mod tests {
                 year: 1,
                 is_active: true,
                 active_months: 12,
+                person_months: dec!(12),
                 monthly_salary_eur: dec!(5000),
                 annual_cost_eur: dec!(42000),
             },
@@ -434,6 +545,7 @@ mod tests {
                 year: 2,
                 is_active: true,
                 active_months: 12,
+                person_months: dec!(12),
                 monthly_salary_eur: dec!(6000),
                 annual_cost_eur: dec!(50400),
             },
@@ -441,6 +553,7 @@ mod tests {
                 year: 3,
                 is_active: false,
                 active_months: 0,
+                person_months: Decimal::ZERO,
                 monthly_salary_eur: dec!(7200),
                 annual_cost_eur: Decimal::ZERO,
             },
@@ -494,5 +607,45 @@ mod tests {
         let result = allocate_personnel_cost_by_wp(&projections, dec!(1.0), 1, 12, &wps).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].amount_eur, dec!(1200) * dec!(6));
+    }
+
+    #[test]
+    fn test_calc_20a_uses_rounded_pm_and_matches_calc_03_total() {
+        // Same role as test_calc_03_person_months_round_half_up (3 months,
+        // FTE 0.79, 2.37 PM raw -> 2.4 rounded), but split evenly across two
+        // fully-overlapping WPs. Each WP's exact PM share is 2.37/2 = 1.185
+        // -- the WP split must still be based on the year's *rounded* 2.4 PM
+        // (matching CALC-03 exactly), not on 2.37, and must split it exactly
+        // in half since both WPs have an equal underlying share.
+        let projections = make_projections(&[(1, "1000")]);
+        let wps = vec![(1u8, 1u32, 3u32), (2u8, 1u32, 3u32)];
+        let result = allocate_personnel_cost_by_wp(&projections, dec!(0.79), 1, 3, &wps).unwrap();
+
+        let role_lines = calculate_personnel_cost_lines(&projections, dec!(0.79), 1, 3).unwrap();
+        let role_total = role_lines[0].annual_cost_eur;
+        assert_eq!(role_total, dec!(1000) * dec!(2.4));
+
+        let wp1 = result.iter().find(|w| w.work_package_id == 1).unwrap();
+        let wp2 = result.iter().find(|w| w.work_package_id == 2).unwrap();
+        assert_eq!(wp1.amount_eur, dec!(1200));
+        assert_eq!(wp2.amount_eur, dec!(1200));
+        // No reconciliation drift: the WP split sums exactly to the same
+        // rounded-PM total CALC-03 computed for this role.
+        assert_eq!(wp1.amount_eur + wp2.amount_eur, role_total);
+    }
+
+    #[test]
+    fn test_calc_20a_uneven_split_sums_exactly_despite_repeating_decimal() {
+        // WP1 gets 8 of 12 months, WP2 gets 4 -- 4/12 has no terminating
+        // decimal representation, so a naive per-WP division could leak a
+        // sub-cent residual. The split must still sum exactly to the total.
+        let projections = make_projections(&[(1, "1200")]);
+        let wps = vec![(1u8, 1u32, 8u32), (2u8, 9u32, 12u32)];
+        let result = allocate_personnel_cost_by_wp(&projections, dec!(1.0), 1, 12, &wps).unwrap();
+        let wp1 = result.iter().find(|w| w.work_package_id == 1).unwrap();
+        let wp2 = result.iter().find(|w| w.work_package_id == 2).unwrap();
+        assert_eq!(wp1.amount_eur, dec!(9600));
+        assert_eq!(wp2.amount_eur, dec!(4800));
+        assert_eq!(wp1.amount_eur + wp2.amount_eur, dec!(1200) * dec!(12));
     }
 }
