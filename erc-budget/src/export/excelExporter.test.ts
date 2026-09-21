@@ -214,7 +214,7 @@ describe('exportToExcel', () => {
     // Roles table starts at row 9 (header) / row 10 (first role): 2 WP rows
     // (3-4) + Total PM/Employment Months/Reconciled? rows (5-7) + blank (8).
     expect(persSheet!.getRow(9).values).toEqual([
-      , 'Role', 'Type', 'Current Salary (TRY)', 'Annual Increase (%)', 'FTE',
+      , 'Role', 'Type', 'Current Salary (TRY)', 'Annual Increase (%)', 'PM',
       'Start Month', 'End Month', 'Base Monthly (€)', 'WP1 (€)', 'WP2 (€)', 'Unattributed (€)', 'Total (€)',
     ]);
 
@@ -417,6 +417,14 @@ describe('exportToExcel', () => {
     expect(cell(4, 5)).toBeCloseTo(9.6, 6);
     expect(cell(5, 5)).toBeCloseTo(9.6, 6);
     expect(cell(6, 5)).toBe('OK');
+
+    // Display format matches the EU Funding & Tenders Portal's own
+    // Person-Months rounding (1 decimal, round-half-up) — display only,
+    // the reconciliation above already proved the underlying values are
+    // still full precision and unaffected by it.
+    expect(persSheet!.getCell(3, 5).numFmt).toBe('0.0');
+    expect(persSheet!.getCell(4, 5).numFmt).toBe('0.0');
+    expect(persSheet!.getCell(5, 5).numFmt).toBe('0.0');
   });
 
   it('embeds a Gantt chart image sheet when canvas rendering succeeds', async () => {

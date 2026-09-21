@@ -350,6 +350,13 @@ export async function exportToExcel(
       // formula below uses (minus the salary/inflation factors), so a role
       // split across simultaneously-active WPs gets its PM split the same
       // way its cost is split.
+      //
+      // Displayed to 1 decimal place, matching the EU Funding & Tenders
+      // Portal's own Person-Months display (standard round-half-up: a
+      // second decimal of 5 or higher rounds the first decimal up, e.g.
+      // 9.65 -> 9.7). This is display-only — the underlying formula keeps
+      // full precision, so the Total PM / Employment Months reconciliation
+      // below compares exact values and can't drift from per-WP rounding.
       summary.role_detail.forEach((_role, k) => {
         const roleRow = personnelFirstDataRow + k;
         const roleStartCell = `$F$${roleRow}`;
@@ -362,7 +369,7 @@ export async function exportToExcel(
         cell.value = {
           formula: `SUMPRODUCT((${helperMonthRange}>=${roleStartCell})*(${helperMonthRange}<=${roleEndCell})*(${helperMonthRange}>=${wpStartCellSelf})*(${helperMonthRange}<=${wpEndCellSelf})*${helperReciprocalRange})*${roleFteCell}`,
         };
-        cell.numFmt = '0.00';
+        cell.numFmt = '0.0';
       });
     });
 
@@ -386,11 +393,11 @@ export async function exportToExcel(
       totalPmCell.value = {
         formula: `SUM(${colLetterStr}${personnelWpTimelineFirstRow}:${colLetterStr}${personnelWpTimelineLastRow})`,
       };
-      totalPmCell.numFmt = '0.00';
+      totalPmCell.numFmt = '0.0';
 
       const employmentCell = employmentRow.getCell(col);
       employmentCell.value = { formula: `(G${roleRow}-F${roleRow}+1)*E${roleRow}` };
-      employmentCell.numFmt = '0.00';
+      employmentCell.numFmt = '0.0';
 
       reconciledRow.getCell(col).value = {
         formula: `IF(${colLetterStr}${personnelWpTimelineTotalPmRow}=${colLetterStr}${personnelWpTimelineEmploymentRow},"OK","MISMATCH")`,
@@ -400,7 +407,7 @@ export async function exportToExcel(
     persSheet.addRow([]);
 
     const headers = [
-      'Role', 'Type', 'Current Salary (TRY)', 'Annual Increase (%)', 'FTE',
+      'Role', 'Type', 'Current Salary (TRY)', 'Annual Increase (%)', 'PM',
       'Start Month', 'End Month', 'Base Monthly (€)',
       ...wpBudgets.map((wp) => `${wpLabel(wp)} (€)`),
       'Unattributed (€)',
@@ -419,6 +426,11 @@ export async function exportToExcel(
         role.start_month,
         role.end_month,
       ]);
+      // Set per-cell, not via getColumn(5) below — column E is also the WP
+      // Timelines table's first role's PM column further up this same
+      // sheet, and a column-wide numFmt would silently overwrite that
+      // cell's own '0.0' format with this one.
+      row.getCell(5).numFmt = '0.00';
       const r = row.number;
       const salaryCell = `C${r}`;
       const increaseCell = `D${r}`;
@@ -463,7 +475,6 @@ export async function exportToExcel(
     }
 
     persSheet.getColumn(3).numFmt = '#,##0.00';
-    persSheet.getColumn(5).numFmt = '0.00';
     for (let col = personnelBaseMonthlyCol; col <= personnelTotalCol; col++) {
       persSheet.getColumn(col).numFmt = '#,##0.00';
     }
