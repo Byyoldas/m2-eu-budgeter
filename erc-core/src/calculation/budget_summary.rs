@@ -290,9 +290,34 @@ pub fn calculate_budget_summary(
         })
         .collect();
 
+    // ── Step 4b: Subcontracting ──────────────────────────────────────────────
+
+    let category_b_total: Decimal = project
+        .subcontracting_items
+        .iter()
+        .map(|i| i.amount_eur)
+        .sum();
+
+    let subcontracting_wp_items: Vec<(Vec<u8>, Decimal)> = project
+        .subcontracting_items
+        .iter()
+        .map(|i| (i.work_package_ids.clone(), i.amount_eur))
+        .collect();
+
+    let subcontracting_detail: Vec<SubcontractingItemDetailDto> = project
+        .subcontracting_items
+        .iter()
+        .map(|i| SubcontractingItemDetailDto {
+            id: i.id,
+            name: i.name.clone(),
+            amount_eur: i.amount_eur,
+            notes: i.notes.clone(),
+            work_package_ids: i.work_package_ids.clone(),
+        })
+        .collect();
+
     // ── Step 5: Direct Totals ────────────────────────────────────────────────
 
-    let category_b_total = project.subcontracting.amount_eur;
     let total_direct = calculate_total_direct_costs(
         category_a_total,
         category_b_total,
@@ -336,10 +361,7 @@ pub fn calculate_budget_summary(
         &equipment_wp_items,
         &travel_wp_items,
         &other_cost_wp_items,
-        (
-            project.subcontracting.work_package_id,
-            project.subcontracting.amount_eur,
-        ),
+        &subcontracting_wp_items,
     )?;
 
     let wp_budgets: Vec<WpBudgetDto> = wp_budget_amounts
@@ -378,5 +400,6 @@ pub fn calculate_budget_summary(
         equipment_detail,
         trip_detail,
         other_cost_detail,
+        subcontracting_detail,
     })
 }

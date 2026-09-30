@@ -564,6 +564,12 @@ mod tests {
         assert_eq!(result.domestic_transport_per_instance, dec!(340));
         assert_eq!(result.per_instance_total_eur, dec!(2227));
         assert_eq!(result.total_trip_cost_eur, dec!(8908));
+        // Rate info surfaced for display in the trip cost preview (Travel
+        // screen's "Acc. rate/night" / "Subsistence rate/day" rows) — must
+        // be the actual per-unit country rate, not just derivable from the
+        // cost/quantity above, since the preview shows it independently.
+        assert_eq!(result.accommodation_rate_eur_per_night, dec!(195));
+        assert_eq!(result.subsistence_rate_eur_per_day, dec!(50));
     }
 
     #[test]

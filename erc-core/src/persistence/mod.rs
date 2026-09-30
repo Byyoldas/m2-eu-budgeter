@@ -18,8 +18,10 @@
 
 use crate::domain::entities::Project;
 use crate::error::AppError;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::str::FromStr;
 
 /// The current .ercbudget file format version written by this crate's
 /// `save_project`. Readers must also accept "1.1" (see `load_project`).
@@ -82,7 +84,53 @@ pub fn load_project(path: &Path) -> Result<Project, AppError> {
 
     // Future: migrate format versions here if file.format_version != CURRENT_FORMAT_VERSION.
 
-    Ok(file.project)
+    let mut project = file.project;
+    migrate_legacy_subcontracting(&json, &mut project);
+
+    Ok(project)
+}
+
+/// Pre-itemization files (before Category B became a list of
+/// `SubcontractingItem`s) had a single `"subcontracting": {"amount_eur":
+/// ..., "work_package_id": ...}` lump sum instead of `subcontracting_items`.
+/// `#[serde(default)]` on the new field means such a file still loads
+/// (with an empty list) rather than erroring — this recovers the old
+/// nonzero amount, if any, into a single migrated item so it isn't silently
+/// dropped on first open after upgrading. Runs once per load; the next save
+/// writes the new format and the old key is gone from the file for good.
+fn migrate_legacy_subcontracting(raw_json: &str, project: &mut Project) {
+    if !project.subcontracting_items.is_empty() {
+        return;
+    }
+    let Ok(root) = serde_json::from_str::<serde_json::Value>(raw_json) else {
+        return;
+    };
+    let Some(old) = root.get("project").and_then(|p| p.get("subcontracting")) else {
+        return;
+    };
+    let Some(amount_str) = old.get("amount_eur").and_then(|v| v.as_str()) else {
+        return;
+    };
+    let Ok(amount) = Decimal::from_str(amount_str) else {
+        return;
+    };
+    if amount <= Decimal::ZERO {
+        return;
+    }
+    let wp_id = old
+        .get("work_package_id")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1) as u8;
+
+    project
+        .subcontracting_items
+        .push(crate::domain::entities::SubcontractingItem {
+            id: uuid::Uuid::new_v4(),
+            name: "Subcontracting".to_string(),
+            amount_eur: amount,
+            notes: Some("Migrated automatically from a pre-itemized project file.".to_string()),
+            work_package_ids: vec![wp_id],
+        });
 }
 
 /// Auto-save to a temporary file (called after every mutation).
@@ -282,5 +330,94 @@ mod tests {
         auto_save(&project, Some(&path)).unwrap();
         assert!(autosave_path.exists());
         std::fs::remove_file(&autosave_path).ok();
+    }
+
+    #[test]
+    fn test_load_project_migrates_legacy_nonzero_subcontracting_lump_sum() {
+        // A pre-itemization file with a nonzero old-format "subcontracting"
+        // lump sum must not silently lose that amount — load_project should
+        // recover it as a single SubcontractingItem.
+        let json = r#"{
+            "format_version": "1.0",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "project": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "config": {
+                    "project_title": "Legacy With Subcontracting",
+                    "pi_name": "PI",
+                    "call_reference": "ERC-2025-CoG",
+                    "duration_years": 1,
+                    "work_package_count": 2,
+                    "work_package_names": [null, null],
+                    "work_package_start_months": [1, 1],
+                    "work_package_end_months": [12, 12],
+                    "default_inflation_rate_pct": "0",
+                    "try_eur_rate": "50",
+                    "indirect_cost_rate_pct": "25",
+                    "rate_version_id": "from_2025_05_13",
+                    "call_opening_date": null
+                },
+                "personnel_roles": [],
+                "equipment_items": [],
+                "trips": [],
+                "other_cost_items": [],
+                "subcontracting": { "amount_eur": "20000", "work_package_id": 2 },
+                "cfs_warning_dismissed": false
+            }
+        }"#;
+
+        let path = temp_path("legacy-subcontracting-migration");
+        std::fs::write(&path, json).unwrap();
+        let project = load_project(&path).unwrap();
+        std::fs::remove_file(&path).ok();
+
+        assert_eq!(project.subcontracting_items.len(), 1);
+        let item = &project.subcontracting_items[0];
+        assert_eq!(item.amount_eur, rust_decimal_macros::dec!(20000));
+        assert_eq!(item.work_package_ids, vec![2]);
+    }
+
+    #[test]
+    fn test_load_project_ignores_legacy_zero_subcontracting() {
+        // A pre-itemization file whose lump sum was zero (the common case —
+        // most projects never used subcontracting) should not synthesize a
+        // spurious €0 item.
+        let json = r#"{
+            "format_version": "1.0",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "project": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "config": {
+                    "project_title": "Legacy Zero Subcontracting",
+                    "pi_name": "PI",
+                    "call_reference": "ERC-2025-CoG",
+                    "duration_years": 1,
+                    "work_package_count": 1,
+                    "work_package_names": [null],
+                    "work_package_start_months": [1],
+                    "work_package_end_months": [12],
+                    "default_inflation_rate_pct": "0",
+                    "try_eur_rate": "50",
+                    "indirect_cost_rate_pct": "25",
+                    "rate_version_id": "from_2025_05_13",
+                    "call_opening_date": null
+                },
+                "personnel_roles": [],
+                "equipment_items": [],
+                "trips": [],
+                "other_cost_items": [],
+                "subcontracting": { "amount_eur": "0", "work_package_id": 1 },
+                "cfs_warning_dismissed": false
+            }
+        }"#;
+
+        let path = temp_path("legacy-zero-subcontracting");
+        std::fs::write(&path, json).unwrap();
+        let project = load_project(&path).unwrap();
+        std::fs::remove_file(&path).ok();
+
+        assert!(project.subcontracting_items.is_empty());
     }
 }

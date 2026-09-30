@@ -75,7 +75,10 @@ pub fn run() {
             commands::other_costs::add_cfs_item,
             commands::other_costs::remove_cfs_item,
             commands::other_costs::dismiss_cfs_warning,
-            commands::other_costs::set_subcontracting,
+            // Subcontracting
+            commands::subcontracting::add_subcontracting_item,
+            commands::subcontracting::update_subcontracting_item,
+            commands::subcontracting::delete_subcontracting_item,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

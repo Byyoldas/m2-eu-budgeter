@@ -1,30 +1,29 @@
 /**
- * Step 7 — Other Direct Costs (C3) + CFS item management.
+ * Step 8 — Subcontracting (Category B).
+ * Entered item-by-item, the same way Other Direct Cost (C3) items are —
+ * name, amount, notes, and Work Package(s). Entirely optional: a project
+ * with no subcontracting simply has an empty list and moves on.
  */
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { otherCostSchema, type OtherCostFormData } from '../validators/schemas';
-import { useProjectStore } from '../store/projectStore';
-import {
-  addOtherCost, updateOtherCost, deleteOtherCost,
-  removeCfsItem,
-} from '../ipc/commands';
+import { subcontractingItemSchema, type SubcontractingItemFormData } from '../validators/schemas';
+import { useProjectStore, useSubcontractingItems } from '../store/projectStore';
+import { addSubcontractingItem, updateSubcontractingItem, deleteSubcontractingItem } from '../ipc/commands';
 import { useBudgetSummary } from '../hooks/useBudgetSummary';
 import { EmptyStateCard } from '../components/EmptyStateCard';
-import { CFSModal } from '../components/CFSModal';
 import { WarningBanner } from '../components/WarningBanner';
-import type { OtherCostInput, OtherCostItemDetailDto } from '../types';
+import type { SubcontractingInput, SubcontractingItemDetailDto } from '../types';
 
-interface OtherCostsProps {
+interface SubcontractingProps {
   onNext: () => void;
   onBack: () => void;
 }
 
 type Mode = 'list' | 'add' | 'edit';
 
-const emptyDefaults: OtherCostFormData = {
+const emptyDefaults: SubcontractingItemFormData = {
   name: '', amount_eur: '', notes: '', work_package_ids: [],
 };
 
@@ -34,27 +33,22 @@ function fmt(v: string | undefined): string {
   return isNaN(n) ? '€ 0.00' : `€ ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
-  const summary = useProjectStore((s) => s.summary);
+export function Subcontracting({ onNext, onBack }: SubcontractingProps) {
+  const items = useSubcontractingItems();
   const projectConfig = useProjectStore((s) => s.projectConfig);
   const wpCount = projectConfig?.work_package_count ?? 1;
   const wpNames = projectConfig?.work_package_names ?? [];
 
   const [mode, setMode] = useState<Mode>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showCfsModal, setShowCfsModal] = useState(false);
 
   const { mutate, isLoading, fieldErrors, formError } = useBudgetSummary();
-
-  // C3 items (excluding CFS)
-  const regularItems = summary?.other_cost_detail?.filter((i) => !i.is_cfs_item) ?? [];
-  const hasCfsItem = summary?.cfs_status === 'REQUIRED_AND_PRESENT';
 
   const {
     register, handleSubmit, reset, watch, setValue,
     formState: { errors },
-  } = useForm<OtherCostFormData>({
-    resolver: zodResolver(otherCostSchema),
+  } = useForm<SubcontractingItemFormData>({
+    resolver: zodResolver(subcontractingItemSchema),
     defaultValues: emptyDefaults,
   });
 
@@ -70,7 +64,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
   // item, the next "Add Item" would reopen with that item's data still
   // filled in instead of a clean form.
   const openAdd = () => { reset(emptyDefaults); setEditingId(null); setMode('add'); };
-  const openEdit = (item: OtherCostItemDetailDto) => {
+  const openEdit = (item: SubcontractingItemDetailDto) => {
     reset({
       name: item.name,
       amount_eur: item.amount_eur,
@@ -80,7 +74,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
     setEditingId(item.id);
     setMode('edit');
   };
-  const openDuplicate = (item: OtherCostItemDetailDto) => {
+  const openDuplicate = (item: SubcontractingItemDetailDto) => {
     reset({
       name: `${item.name} (copy)`,
       amount_eur: item.amount_eur,
@@ -91,24 +85,20 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
     setMode('add');
   };
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this cost item?')) return;
-    await mutate(() => deleteOtherCost(id));
-  };
-  const handleRemoveCfs = async () => {
-    if (!window.confirm('Remove the CFS item?')) return;
-    await mutate(() => removeCfsItem());
+    if (!window.confirm('Delete this subcontracting item?')) return;
+    await mutate(() => deleteSubcontractingItem(id));
   };
 
-  const onSubmit = async (data: OtherCostFormData) => {
-    const input: OtherCostInput = {
+  const onSubmit = async (data: SubcontractingItemFormData) => {
+    const input: SubcontractingInput = {
       name: data.name,
       amount_eur: data.amount_eur,
       notes: data.notes ?? null,
       work_package_ids: data.work_package_ids,
     };
     const command = editingId
-      ? () => updateOtherCost(editingId, input)
-      : () => addOtherCost(input);
+      ? () => updateSubcontractingItem(editingId, input)
+      : () => addSubcontractingItem(input);
     const result = await mutate(command);
     if (result) setMode('list');
   };
@@ -117,29 +107,29 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
     return (
       <div className="screen">
         <div className="screen-header">
-          <h2 className="screen-title">{editingId ? 'Edit Cost Item' : 'Add Other Direct Cost'}</h2>
+          <h2 className="screen-title">{editingId ? 'Edit Subcontracting Item' : 'Add Subcontracting Item'}</h2>
         </div>
         {formError && <WarningBanner message={formError} severity="error" />}
 
         <form className="screen-form" onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="form-section">
             <div className="form-field">
-              <label htmlFor="oc-name" className="form-label required">Item Name</label>
-              <input id="oc-name" type="text" placeholder="e.g. Open Access Publication Fee, Lab Consumables"
+              <label htmlFor="sub-name" className="form-label required">Item Name</label>
+              <input id="sub-name" type="text" placeholder="e.g. Fieldwork subcontract, Data annotation service"
                 className={`form-input${fieldError('name') ? ' form-input--error' : ''}`}
                 {...register('name')} />
               {fieldError('name') && <span className="form-error">{fieldError('name')}</span>}
             </div>
             <div className="form-field">
-              <label htmlFor="oc-amount" className="form-label required">Amount (€)</label>
-              <input id="oc-amount" type="number" step="any" min={0}
+              <label htmlFor="sub-amount" className="form-label required">Amount (€)</label>
+              <input id="sub-amount" type="number" step="any" min={0}
                 className={`form-input${fieldError('amount_eur') ? ' form-input--error' : ''}`}
                 {...register('amount_eur')} />
               {fieldError('amount_eur') && <span className="form-error">{fieldError('amount_eur')}</span>}
             </div>
             <div className="form-field">
-              <label htmlFor="oc-notes" className="form-label">Notes</label>
-              <textarea id="oc-notes" rows={2} className="form-input" {...register('notes')} />
+              <label htmlFor="sub-notes" className="form-label">Notes</label>
+              <textarea id="sub-notes" rows={2} className="form-input" {...register('notes')} />
             </div>
             <div className="form-field">
               <label className="form-label required">Work Package(s)</label>
@@ -177,40 +167,20 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
   return (
     <div className="screen">
       <div className="screen-header">
-        <h2 className="screen-title">Other Direct Costs (Category C3)</h2>
+        <h2 className="screen-title">Subcontracting (Category B)</h2>
         <p className="screen-description">
-          Publication fees, lab consumables, software licenses, and other direct costs.
+          Optional — leave empty if this project has no subcontracting. Add each subcontract
+          as its own item, same as Other Direct Costs.
         </p>
         <button className="btn btn--primary" onClick={openAdd}>+ Add Item</button>
       </div>
-
-      {summary?.cfs_prompt_required && (
-        <WarningBanner
-          message="Budget exceeds €430,000 — a Certificate on Financial Statements (CFS) is required."
-          severity="warning"
-          action={{ label: 'Add CFS Cost', onClick: () => setShowCfsModal(true) }}
-        />
-      )}
-
       <div className="item-list">
-        {hasCfsItem && (
-          <div className="item-card item-card--cfs">
-            <div className="item-card-header">
-              <div className="item-card-info">
-                <span className="badge badge--info">CFS</span>
-                <span className="item-card-title">Certificate on Financial Statements</span>
-              </div>
-              <button className="btn btn--sm btn--danger" onClick={handleRemoveCfs}>Remove</button>
-            </div>
-          </div>
-        )}
-
-        {regularItems.length === 0 && !hasCfsItem ? (
-          <EmptyStateCard icon="📋" title="No other direct costs yet"
-            description="Add publication fees, lab consumables, software licenses, and other direct costs."
+        {items.length === 0 ? (
+          <EmptyStateCard icon="🤝" title="No subcontracting yet"
+            description="Add subcontracted fieldwork, services, or other externally-delivered work. Skip this if the project has none."
             action={{ label: '+ Add First Item', onClick: openAdd }} />
         ) : (
-          regularItems.map((item: OtherCostItemDetailDto) => (
+          items.map((item: SubcontractingItemDetailDto) => (
             <div key={item.id} className="item-card">
               <div className="item-card-header">
                 <div className="item-card-info">
@@ -234,10 +204,8 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
 
       <div className="screen-footer">
         <button className="btn btn--ghost" onClick={onBack}>← Back</button>
-        <button className="btn btn--primary btn--lg" onClick={onNext}>Next: Subcontracting →</button>
+        <button className="btn btn--primary btn--lg" onClick={onNext}>Next: Review & Export →</button>
       </div>
-
-      <CFSModal open={showCfsModal} onClose={() => setShowCfsModal(false)} />
     </div>
   );
 }

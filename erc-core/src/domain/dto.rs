@@ -95,6 +95,19 @@ pub struct OtherCostInputDto {
     pub work_package_ids: Vec<u8>,
 }
 
+/// Input for one Category B (Subcontracting) item — same shape as
+/// `OtherCostInputDto`, entered item-by-item.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-rs", derive(ts_rs::TS), ts(export))]
+pub struct SubcontractingInputDto {
+    pub name: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    #[cfg_attr(feature = "ts-rs", ts(type = "string"))]
+    pub amount_eur: Decimal,
+    pub notes: Option<String>,
+    pub work_package_ids: Vec<u8>,
+}
+
 /// A Work Package's share of some cost, used in per-WP breakdowns.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts-rs", derive(ts_rs::TS), ts(export))]
@@ -228,6 +241,19 @@ pub struct OtherCostItemDetailDto {
     #[cfg_attr(feature = "ts-rs", ts(type = "string"))]
     pub amount_eur: Decimal,
     pub is_cfs_item: bool,
+    pub notes: Option<String>,
+    pub work_package_ids: Vec<u8>,
+}
+
+/// One Category B (Subcontracting) item, for the expandable dashboard list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-rs", derive(ts_rs::TS), ts(export))]
+pub struct SubcontractingItemDetailDto {
+    pub id: Uuid,
+    pub name: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    #[cfg_attr(feature = "ts-rs", ts(type = "string"))]
+    pub amount_eur: Decimal,
     pub notes: Option<String>,
     pub work_package_ids: Vec<u8>,
 }
@@ -381,6 +407,7 @@ pub struct BudgetSummaryDto {
     pub equipment_detail: Vec<EquipmentItemDetailDto>,
     pub trip_detail: Vec<TripDetailDto>,
     pub other_cost_detail: Vec<OtherCostItemDetailDto>,
+    pub subcontracting_detail: Vec<SubcontractingItemDetailDto>,
 }
 
 /// Serialisable snapshot of the full project (for file I/O responses).

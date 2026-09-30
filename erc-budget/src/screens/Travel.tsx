@@ -24,6 +24,15 @@ interface TravelProps {
 type Mode = 'list' | 'add' | 'edit';
 type TripKind = 'Itemized' | 'FlatAmount';
 
+const emptyDefaults = {
+  name: '', number_of_instances: 1,
+  destination_country_code: '', one_way_distance_km: 0,
+  number_of_nights: 1, number_of_days: 1,
+  domestic_transport_per_instance_eur: '0',
+  flat_amount_per_instance_eur: '',
+  work_package_ids: [] as number[],
+};
+
 const DISTANCE_CALCULATOR_URL =
   'https://commission.europa.eu/funding-and-tenders/procedures-guidelines-tenders/information-contractors-and-beneficiaries/calculate-unit-costs-eligible-travel-costs_en';
 
@@ -51,14 +60,7 @@ export function Travel({ onNext, onBack }: TravelProps) {
   const { preview, isLoading: previewLoading } = usePreview<TripCostPreviewDto>();
 
   const { register, handleSubmit, watch, reset, setValue } = useForm({
-    defaultValues: {
-      name: '', number_of_instances: 1,
-      destination_country_code: '', one_way_distance_km: 0,
-      number_of_nights: 1, number_of_days: 1,
-      domestic_transport_per_instance_eur: '0',
-      flat_amount_per_instance_eur: '',
-      work_package_ids: [] as number[],
-    },
+    defaultValues: emptyDefaults,
   });
 
   const watched = watch();
@@ -108,7 +110,12 @@ export function Travel({ onNext, onBack }: TravelProps) {
     return () => clearTimeout(timer);
   }, [JSON.stringify(watched), tripKind]);
 
-  const openAdd = () => { reset(); setEditingTrip(null); setPreviewResult(null); setTripKind('Itemized'); setMode('add'); };
+  // Passing an explicit empty object (not a bare reset()) matters here — a
+  // bare reset() falls back to whatever values the *last* reset(values) call
+  // set as the form's new baseline, so after editing (or duplicating) a
+  // trip, the next "Add Trip" would reopen with that trip's data still
+  // filled in instead of a clean form.
+  const openAdd = () => { reset(emptyDefaults); setEditingTrip(null); setPreviewResult(null); setTripKind('Itemized'); setMode('add'); };
   const openEdit = (trip: TripDetailDto) => {
     setEditingTrip(trip);
     const isItemized = trip.flight_cost_per_instance !== null;
@@ -126,6 +133,24 @@ export function Travel({ onNext, onBack }: TravelProps) {
     });
     setPreviewResult(null);
     setMode('edit');
+  };
+  const openDuplicate = (trip: TripDetailDto) => {
+    setEditingTrip(null);
+    const isItemized = trip.flight_cost_per_instance !== null;
+    setTripKind(isItemized ? 'Itemized' : 'FlatAmount');
+    reset({
+      name: `${trip.name} (copy)`,
+      number_of_instances: trip.number_of_instances,
+      work_package_ids: trip.work_package_ids,
+      destination_country_code: trip.destination_country_code ?? '',
+      one_way_distance_km: trip.one_way_distance_km ?? 0,
+      number_of_nights: trip.number_of_nights ?? 1,
+      number_of_days: trip.number_of_days ?? 1,
+      domestic_transport_per_instance_eur: trip.domestic_transport_per_instance ?? '0',
+      flat_amount_per_instance_eur: isItemized ? '' : trip.per_instance_total_eur,
+    });
+    setPreviewResult(null);
+    setMode('add');
   };
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this trip?')) return;
@@ -170,6 +195,7 @@ export function Travel({ onNext, onBack }: TravelProps) {
           { label: 'Accommodation', value: fmt(previewResult.accommodation_cost_per_instance) },
           previewResult.accommodation_rate_eur ? { label: 'Acc. rate/night', value: fmt(previewResult.accommodation_rate_eur) } : null,
           { label: 'Subsistence', value: fmt(previewResult.subsistence_cost_per_instance) },
+          previewResult.subsistence_rate_eur ? { label: 'Subsistence rate/day', value: fmt(previewResult.subsistence_rate_eur) } : null,
           { label: 'Domestic transport', value: fmt(previewResult.domestic_transport_per_instance) },
           { label: 'Per instance', value: fmt(previewResult.per_instance_total_eur) },
           { label: 'Total (all instances)', value: fmt(previewResult.total_trip_cost_eur), highlight: true },
@@ -311,7 +337,7 @@ export function Travel({ onNext, onBack }: TravelProps) {
             action={{ label: '+ Add First Trip', onClick: openAdd }} />
         ) : (
           trips.map((trip) => (
-            <TripCard key={trip.id} trip={trip} onEdit={openEdit} onDelete={handleDelete} />
+            <TripCard key={trip.id} trip={trip} onEdit={openEdit} onDuplicate={openDuplicate} onDelete={handleDelete} />
           ))
         )}
       </div>

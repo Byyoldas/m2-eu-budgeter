@@ -117,6 +117,10 @@ export const useEquipmentItems = () =>
 export const useTrips = () =>
   useProjectStore((s) => s.summary?.trip_detail ?? []);
 
+/** Returns the list of subcontracting items from the current summary. */
+export const useSubcontractingItems = () =>
+  useProjectStore((s) => s.summary?.subcontracting_detail ?? []);
+
 /** Returns the CFS status from the summary. */
 export const useCfsStatus = () =>
   useProjectStore((s) => s.summary?.cfs_status ?? 'NOT_REQUIRED');

@@ -22,7 +22,12 @@ pub struct Project {
     pub equipment_items: Vec<EquipmentItem>,
     pub trips: Vec<Trip>,
     pub other_cost_items: Vec<OtherDirectCostItem>,
-    pub subcontracting: Subcontracting,
+    /// Category B — Subcontracting items. `#[serde(default)]` so a pre-1.2
+    /// file (which had a single `subcontracting` lump sum instead of this
+    /// list) still loads — `persistence::load_project` migrates that old
+    /// value into a one-item list on first load, see there.
+    #[serde(default)]
+    pub subcontracting_items: Vec<SubcontractingItem>,
     /// True when the user dismissed the CFS modal without entering an amount.
     pub cfs_warning_dismissed: bool,
 }
@@ -37,7 +42,7 @@ impl Project {
             equipment_items: Vec::new(),
             trips: Vec::new(),
             other_cost_items: Vec::new(),
-            subcontracting: Subcontracting::default(),
+            subcontracting_items: Vec::new(),
             cfs_warning_dismissed: false,
         }
     }
@@ -255,22 +260,17 @@ pub struct OtherDirectCostItem {
 
 // ─── Subcontracting (B) ───────────────────────────────────────────────────────
 
-/// Category B — Subcontracting. Default is zero.
+/// A single item in Category B — Subcontracting. Entered item-by-item, same
+/// shape as `OtherDirectCostItem`: cost is split evenly across every listed
+/// Work Package (see `wp_budget::aggregate_wp_budgets`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Subcontracting {
+pub struct SubcontractingItem {
+    pub id: Uuid,
+    pub name: String,
     #[serde(with = "rust_decimal::serde::str")]
     pub amount_eur: Decimal,
-    /// The Work Package this lump sum is charged to.
-    pub work_package_id: u8,
-}
-
-impl Default for Subcontracting {
-    fn default() -> Self {
-        Self {
-            amount_eur: Decimal::ZERO,
-            work_package_id: 1,
-        }
-    }
+    pub notes: Option<String>,
+    pub work_package_ids: Vec<u8>,
 }
 
 #[cfg(test)]
@@ -342,7 +342,7 @@ mod tests {
         assert!(project.equipment_items.is_empty());
         assert!(project.trips.is_empty());
         assert!(project.other_cost_items.is_empty());
-        assert_eq!(project.subcontracting.amount_eur, Decimal::ZERO);
+        assert!(project.subcontracting_items.is_empty());
         assert!(!project.cfs_warning_dismissed);
         assert!(!project.has_cfs_item());
     }

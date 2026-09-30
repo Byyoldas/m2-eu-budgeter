@@ -9,6 +9,7 @@ import type { TripDetailDto } from '../types';
 interface TripCardProps {
   trip: TripDetailDto;
   onEdit: (trip: TripDetailDto) => void;
+  onDuplicate: (trip: TripDetailDto) => void;
   onDelete: (id: string) => void;
 }
 
@@ -18,7 +19,7 @@ function fmt(v: string | null | undefined): string {
   return isNaN(n) ? '—' : `€ ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function TripCard({ trip, onEdit, onDelete }: TripCardProps) {
+export function TripCard({ trip, onEdit, onDuplicate, onDelete }: TripCardProps) {
   const [expanded, setExpanded] = useState(false);
   const isItemized = trip.flight_cost_per_instance !== null;
   const wpNames = useProjectStore((s) => s.projectConfig?.work_package_names ?? []);
@@ -46,6 +47,7 @@ export function TripCard({ trip, onEdit, onDelete }: TripCardProps) {
               {expanded ? '▲' : '▼'}
             </button>
           )}
+          <button className="btn btn--sm btn--ghost" onClick={() => onDuplicate(trip)}>Duplicate</button>
           <button className="btn btn--sm btn--ghost" onClick={() => onEdit(trip)}>Edit</button>
           <button className="btn btn--sm btn--danger" onClick={() => onDelete(trip.id)}>Delete</button>
         </div>

@@ -9,10 +9,13 @@
  *            an inclusive Duration column, and a Person-Months column per
  *            role reconciled against each role's raw employment length) sits
  *            above the roles table (salary/inflation input cells + formula-
- *            built Base Monthly cost; per-Work-Package cost and the row
- *            Total are genuine formulas driven by two hidden helper sheets:
- *            _WPMonthHelper (month-by-month WP-overlap counts, unchanged)
- *            and _WPYearHelper (one row per role per project year, which
+ *            built Base Monthly cost, plus a display-only Average Monthly
+ *            column — the plain average of the role's inflated salary
+ *            across every project year, not used by any cost formula;
+ *            per-Work-Package cost and the row Total are genuine formulas
+ *            driven by two hidden helper sheets: _WPMonthHelper
+ *            (month-by-month WP-overlap counts, unchanged) and
+ *            _WPYearHelper (one row per role per project year, which
  *            reproduces CALC-03/CALC-20a's Person-Months rounding — round
  *            each role-year's PM to 1 decimal place before pricing it —
  *            entirely as formulas, so the sheet stays live if salary/FTE/
@@ -21,6 +24,7 @@
  *   Sheet 4: Equipment Detail
  *   Sheet 5: Travel Detail
  *   Sheet 6: Other Direct Costs
+ *   Sheet 7: Subcontracting Detail
  *
  * Uses ExcelJS. The file is downloaded via a data URL (browser-side).
  * On Tauri desktop the data URL approach works through the WebView.
@@ -179,7 +183,8 @@ export async function exportToExcel(
     yearHelperFirstRow + roleIdx * durationYears + (year - 1);
   const personnelFixedCols = 7; // Role, Type, Salary(TRY), Increase%, FTE, Start, End
   const personnelBaseMonthlyCol = personnelFixedCols + 1; // H
-  const personnelWpStartCol = personnelBaseMonthlyCol + 1; // I
+  const personnelAverageMonthlyCol = personnelBaseMonthlyCol + 1; // I
+  const personnelWpStartCol = personnelAverageMonthlyCol + 1; // J
   const personnelUnattributedCol = personnelWpStartCol + wpBudgets.length; // right after the last WP column
   const personnelTotalCol = personnelUnattributedCol + 1;
   const personnelTotalColLetter = colLetter(personnelTotalCol);
@@ -198,6 +203,10 @@ export async function exportToExcel(
   const otherCostExists = summary.other_cost_detail.length > 0;
   const otherCostLastRow = 1 + summary.other_cost_detail.length;
   const OTHER_COST_AMOUNT_COL = 'C';
+
+  const subcontractingExists = summary.subcontracting_detail.length > 0;
+  const subcontractingLastRow = 1 + summary.subcontracting_detail.length;
+  const SUBCONTRACTING_AMOUNT_COL = 'C';
 
   // ── Sheet 1: Budget Summary ───────────────────────────────────────────────
 
@@ -238,7 +247,10 @@ export async function exportToExcel(
     'A  Personnel', 'personnel_eur',
     personnelExists ? `SUM(Personnel!${personnelTotalColLetter}${personnelFirstDataRow}:${personnelTotalColLetter}${personnelLastRow})` : 0,
   );
-  const bRow = addCategoryRow('B  Subcontracting', 'subcontracting_eur', n(summary.category_b_total));
+  const bRow = addCategoryRow(
+    'B  Subcontracting', 'subcontracting_eur',
+    subcontractingExists ? `SUM('Subcontracting'!${SUBCONTRACTING_AMOUNT_COL}2:${SUBCONTRACTING_AMOUNT_COL}${subcontractingLastRow})` : 0,
+  );
   const c1Row = addCategoryRow(
     'C1 Travel', 'travel_eur',
     travelExists ? `SUM(Travel!${TRAVEL_TOTAL_COL}2:${TRAVEL_TOTAL_COL}${travelLastRow})` : 0,
@@ -466,7 +478,7 @@ export async function exportToExcel(
 
     const headers = [
       'Role', 'Type', 'Current Salary (TRY)', 'Annual Increase (%)', 'PM',
-      'Start Month', 'End Month', 'Base Monthly (€)',
+      'Start Month', 'End Month', 'Base Monthly (€)', 'Average Monthly (€)',
       ...wpBudgets.map((wp) => `${wpLabel(wp)} (€)`),
       'Unattributed (€)',
       'Total (€)',
@@ -497,6 +509,17 @@ export async function exportToExcel(
 
       row.getCell(personnelBaseMonthlyCol).value = { formula: `${salaryCell}/${tryRateCellRef}` };
 
+      const yearRoleFirstRow = yearHelperRowFor(k, 1);
+      const yearRoleLastRow = yearHelperRowFor(k, durationYears);
+
+      // Average Monthly (€): display only, doesn't feed any cost figure —
+      // the plain average of this role's inflated monthly salary
+      // (_WPYearHelper column E) across every project year, regardless of
+      // which years the role is actually active in.
+      row.getCell(personnelAverageMonthlyCol).value = {
+        formula: `AVERAGE(_WPYearHelper!$E$${yearRoleFirstRow}:$E$${yearRoleLastRow})`,
+      };
+
       // Per-WP cost: a genuine formula, summed year by year against
       // _WPYearHelper so the Person-Months-rounding rule (CALC-03/CALC-20a)
       // is honored — for each project year, this role's WP-covered PM
@@ -504,8 +527,6 @@ export async function exportToExcel(
       // as a share of that year's rounded, priced pool
       // (_WPYearHelper column I). A year with no WP coverage contributes 0
       // rather than dividing by zero.
-      const yearRoleFirstRow = yearHelperRowFor(k, 1);
-      const yearRoleLastRow = yearHelperRowFor(k, durationYears);
       wpBudgets.forEach((_wp, i) => {
         const wpTableRow = personnelWpTimelineFirstRow + i;
         const wpStartCell = `$B$${wpTableRow}`;
@@ -636,6 +657,25 @@ export async function exportToExcel(
       ]);
     }
     ocSheet.getColumn(3).numFmt = '#,##0.00';
+  }
+
+  // ── Sheet 7: Subcontracting ────────────────────────────────────────────────
+
+  if (subcontractingExists) {
+    const subSheet = wb.addWorksheet('Subcontracting');
+    subSheet.properties.defaultColWidth = 20;
+    const sh = subSheet.addRow(['Item', 'Work Package(s)', 'Amount (€)', 'Notes']);
+    sh.font = { bold: true };
+
+    for (const item of summary.subcontracting_detail) {
+      subSheet.addRow([
+        item.name,
+        wpTag(item.work_package_ids),
+        n(item.amount_eur),
+        item.notes ?? '',
+      ]);
+    }
+    subSheet.getColumn(3).numFmt = '#,##0.00';
   }
 
   const filename = `${(config?.project_title ?? 'M2-EU-Budgeter').replace(/\s+/g, '_')}_Budget.xlsx`;

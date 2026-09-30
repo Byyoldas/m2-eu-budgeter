@@ -150,3 +150,14 @@ export const otherCostSchema = z.object({
 });
 
 export type OtherCostFormData = z.infer<typeof otherCostSchema>;
+
+// ─── Subcontracting Item Schema ────────────────────────────────────────────────
+
+export const subcontractingItemSchema = z.object({
+  name: z.string().min(1, 'Item name is required.'),
+  amount_eur: decimalStr('Amount'),
+  notes: z.string().nullable().optional(),
+  work_package_ids: z.array(z.number().int().positive()).min(1, 'Select at least one Work Package.'),
+});
+
+export type SubcontractingItemFormData = z.infer<typeof subcontractingItemSchema>;

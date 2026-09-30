@@ -11,6 +11,7 @@ import type {
   EquipmentItemInput,
   TripInput,
   OtherCostInput,
+  SubcontractingInput,
   BudgetSummaryDto,
   RoleCostPreviewDto,
   EquipmentPreviewDto,
@@ -113,5 +114,13 @@ export const removeCfsItem = (): Promise<BudgetSummaryDto> =>
 export const dismissCfsWarning = (): Promise<BudgetSummaryDto> =>
   invoke('dismiss_cfs_warning');
 
-export const setSubcontracting = (amountEur: string, workPackageId: number): Promise<BudgetSummaryDto> =>
-  invoke('set_subcontracting', { amount_eur: amountEur, work_package_id: workPackageId });
+// ─── Subcontracting ───────────────────────────────────────────────────────────
+
+export const addSubcontractingItem = (input: SubcontractingInput): Promise<BudgetSummaryDto> =>
+  invoke('add_subcontracting_item', { input });
+
+export const updateSubcontractingItem = (id: string, input: SubcontractingInput): Promise<BudgetSummaryDto> =>
+  invoke('update_subcontracting_item', { id, input });
+
+export const deleteSubcontractingItem = (id: string): Promise<BudgetSummaryDto> =>
+  invoke('delete_subcontracting_item', { id });

@@ -25,6 +25,7 @@ import { Personnel } from './screens/Personnel';
 import { Equipment } from './screens/Equipment';
 import { Travel } from './screens/Travel';
 import { OtherCosts } from './screens/OtherCosts';
+import { Subcontracting } from './screens/Subcontracting';
 import { ReviewExport } from './screens/ReviewExport';
 
 import type { Screen } from './types';
@@ -38,6 +39,7 @@ const STEP_ORDER: Screen[] = [
   'equipment',
   'travel',
   'other-costs',
+  'subcontracting',
   'review-export',
 ];
 
@@ -116,6 +118,9 @@ export function App() {
         )}
         {screen === 'other-costs' && (
           <OtherCosts onNext={goNext} onBack={goBack} />
+        )}
+        {screen === 'subcontracting' && (
+          <Subcontracting onNext={goNext} onBack={goBack} />
         )}
         {screen === 'review-export' && (
           <ReviewExport onBack={goBack} />

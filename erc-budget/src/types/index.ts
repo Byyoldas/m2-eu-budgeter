@@ -32,6 +32,7 @@ export type { PersonnelRoleInputDto as PersonnelRoleInput } from '../../../erc-c
 export type { EquipmentItemInputDto as EquipmentItemInput } from '../../../erc-core/bindings/EquipmentItemInputDto';
 export type { TripInputDto as TripInput } from '../../../erc-core/bindings/TripInputDto';
 export type { OtherCostInputDto as OtherCostInput } from '../../../erc-core/bindings/OtherCostInputDto';
+export type { SubcontractingInputDto as SubcontractingInput } from '../../../erc-core/bindings/SubcontractingInputDto';
 
 // ─── Output DTOs (backend → frontend) ────────────────────────────────────────
 
@@ -42,6 +43,7 @@ export type { RoleCostPreviewDto } from '../../../erc-core/bindings/RoleCostPrev
 export type { EquipmentItemDetailDto } from '../../../erc-core/bindings/EquipmentItemDetailDto';
 export type { EquipmentPreviewDto } from '../../../erc-core/bindings/EquipmentPreviewDto';
 export type { OtherCostItemDetailDto } from '../../../erc-core/bindings/OtherCostItemDetailDto';
+export type { SubcontractingItemDetailDto } from '../../../erc-core/bindings/SubcontractingItemDetailDto';
 export type { TripDetailDto } from '../../../erc-core/bindings/TripDetailDto';
 export type { TripCostPreviewDto } from '../../../erc-core/bindings/TripCostPreviewDto';
 export type { WpBudgetDto } from '../../../erc-core/bindings/WpBudgetDto';
@@ -68,6 +70,7 @@ export type Screen =
   | 'equipment'
   | 'travel'
   | 'other-costs'
+  | 'subcontracting'
   | 'review-export';
 
 export const SCREENS: Screen[] = [
@@ -78,6 +81,7 @@ export const SCREENS: Screen[] = [
   'equipment',
   'travel',
   'other-costs',
+  'subcontracting',
   'review-export',
 ];
 
@@ -90,5 +94,6 @@ export const SCREEN_LABELS: Record<Screen, string> = {
   'equipment': 'Equipment (C2)',
   'travel': 'Travel (C1)',
   'other-costs': 'Other Costs (C3)',
+  'subcontracting': 'Subcontracting (B)',
   'review-export': 'Review & Export',
 };

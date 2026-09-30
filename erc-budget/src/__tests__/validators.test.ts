@@ -16,7 +16,7 @@ import {
   tripSchema,
   otherCostSchema,
   cfsItemSchema,
-  subcontractingSchema,
+  subcontractingItemSchema,
 } from '../validators/schemas';
 
 // ─── projectSetupSchema ───────────────────────────────────────────────────────
@@ -482,25 +482,38 @@ describe('cfsItemSchema', () => {
   });
 });
 
-// ─── subcontractingSchema ─────────────────────────────────────────────────────
+// ─── subcontractingItemSchema ──────────────────────────────────────────────────
 
-describe('subcontractingSchema', () => {
-  it('accepts zero amount (no subcontracting)', () => {
-    expect(subcontractingSchema.safeParse({ amount_eur: '0', work_package_id: 1 }).success).toBe(true);
+describe('subcontractingItemSchema', () => {
+  const validData = {
+    name: 'Fieldwork subcontract',
+    amount_eur: '20000',
+    work_package_ids: [1],
+  };
+
+  it('accepts a valid subcontracting item', () => {
+    expect(subcontractingItemSchema.safeParse(validData).success).toBe(true);
   });
 
-  it('accepts positive subcontracting amount', () => {
-    expect(subcontractingSchema.safeParse({ amount_eur: '15000', work_package_id: 1 }).success).toBe(true);
+  it('rejects empty name', () => {
+    const r = subcontractingItemSchema.safeParse({ ...validData, name: '' });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects zero amount', () => {
+    const r = subcontractingItemSchema.safeParse({ ...validData, amount_eur: '0' });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0].message).toMatch(/positive/i);
   });
 
   it('rejects negative amount', () => {
-    const r = subcontractingSchema.safeParse({ amount_eur: '-1', work_package_id: 1 });
+    const r = subcontractingItemSchema.safeParse({ ...validData, amount_eur: '-100' });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues[0].message).toMatch(/zero or a positive/i);
   });
 
-  it('rejects a missing Work Package', () => {
-    const r = subcontractingSchema.safeParse({ amount_eur: '0', work_package_id: undefined });
+  it('rejects an empty Work Package selection', () => {
+    const r = subcontractingItemSchema.safeParse({ ...validData, work_package_ids: [] });
     expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0].message).toMatch(/at least one/i);
   });
 });

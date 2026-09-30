@@ -9,9 +9,12 @@
 //! `AppError::Validation(Vec<FieldError>)` with structured error detail.
 
 use crate::domain::dto::{
-    EquipmentItemInputDto, OtherCostInputDto, PersonnelRoleInputDto, TripInputDto,
+    EquipmentItemInputDto, OtherCostInputDto, PersonnelRoleInputDto, SubcontractingInputDto,
+    TripInputDto,
 };
-use crate::domain::entities::{OtherDirectCostItem, PersonnelRole, RoleType, TripType};
+use crate::domain::entities::{
+    OtherDirectCostItem, PersonnelRole, RoleType, SubcontractingItem, TripType,
+};
 use crate::error::{AppError, FieldError, ValidationErrors};
 use rust_decimal::Decimal;
 
@@ -334,6 +337,54 @@ pub fn validate_other_cost(
     // (is_cfs_item is only set by the OC-02 auto-trigger flow, which bypasses
     // this validator entirely — it has its own inline Work Package validation
     // in commands::other_costs::add_cfs_item.)
+
+    errors.into_result()
+}
+
+// ─── Subcontracting Validation ────────────────────────────────────────────────
+
+/// Validate a SubcontractingItem input — same rules as `validate_other_cost`
+/// (Category B items are entered item-by-item the same way C3 items are).
+pub fn validate_subcontracting_item(
+    dto: &SubcontractingInputDto,
+    work_package_count: u8,
+    _existing_items: &[SubcontractingItem],
+) -> Result<(), AppError> {
+    let mut errors = ValidationErrors::default();
+
+    if dto.name.trim().is_empty() {
+        errors.push(FieldError::new(
+            "name",
+            "REQUIRED",
+            "Item name is required.",
+        ));
+    }
+
+    if dto.amount_eur <= Decimal::ZERO {
+        errors.push(FieldError::new(
+            "amount_eur",
+            "INVALID_SUBCONTRACTING_AMOUNT",
+            "Amount must be greater than zero.",
+        ));
+    }
+
+    if dto.work_package_ids.is_empty() {
+        errors.push(FieldError::new(
+            "work_package_ids",
+            "NO_WORK_PACKAGE",
+            "At least one Work Package must be selected.",
+        ));
+    }
+    for &wp in &dto.work_package_ids {
+        if wp < 1 || wp > work_package_count {
+            errors.push(FieldError::new(
+                "work_package_ids",
+                "WP_OUT_OF_RANGE",
+                "Select valid Work Packages.",
+            ));
+            break;
+        }
+    }
 
     errors.into_result()
 }
@@ -936,6 +987,79 @@ mod tests {
         };
         assert!(has_field_error(
             &validate_other_cost(&dto, 3, &[]),
+            "work_package_ids",
+            "WP_OUT_OF_RANGE"
+        ));
+    }
+
+    // ── validate_subcontracting_item tests ─────────────────────────────────────
+
+    #[test]
+    fn test_val_sub_valid_item() {
+        let dto = SubcontractingInputDto {
+            name: "Fieldwork subcontract".to_string(),
+            amount_eur: dec!(20000),
+            notes: None,
+            work_package_ids: vec![1],
+        };
+        assert!(validate_subcontracting_item(&dto, 3, &[]).is_ok());
+    }
+
+    #[test]
+    fn test_val_sub_empty_name_returns_error() {
+        let dto = SubcontractingInputDto {
+            name: "".to_string(),
+            amount_eur: dec!(500),
+            notes: None,
+            work_package_ids: vec![1],
+        };
+        assert!(has_field_error(
+            &validate_subcontracting_item(&dto, 3, &[]),
+            "name",
+            "REQUIRED"
+        ));
+    }
+
+    #[test]
+    fn test_val_sub_zero_amount_returns_error() {
+        let dto = SubcontractingInputDto {
+            name: "Item".to_string(),
+            amount_eur: dec!(0),
+            notes: None,
+            work_package_ids: vec![1],
+        };
+        assert!(has_field_error(
+            &validate_subcontracting_item(&dto, 3, &[]),
+            "amount_eur",
+            "INVALID_SUBCONTRACTING_AMOUNT"
+        ));
+    }
+
+    #[test]
+    fn test_val_sub_no_work_package_returns_error() {
+        let dto = SubcontractingInputDto {
+            name: "Item".to_string(),
+            amount_eur: dec!(1000),
+            notes: None,
+            work_package_ids: vec![],
+        };
+        assert!(has_field_error(
+            &validate_subcontracting_item(&dto, 3, &[]),
+            "work_package_ids",
+            "NO_WORK_PACKAGE"
+        ));
+    }
+
+    #[test]
+    fn test_val_sub_work_package_out_of_range_returns_error() {
+        let dto = SubcontractingInputDto {
+            name: "Item".to_string(),
+            amount_eur: dec!(1000),
+            notes: None,
+            work_package_ids: vec![9],
+        };
+        assert!(has_field_error(
+            &validate_subcontracting_item(&dto, 3, &[]),
             "work_package_ids",
             "WP_OUT_OF_RANGE"
         ));

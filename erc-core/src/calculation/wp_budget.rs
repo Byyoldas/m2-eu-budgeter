@@ -4,9 +4,8 @@
 //! contribution:
 //! - Personnel: pre-computed per-role WP allocations (CALC-20a).
 //! - Equipment: each item's cost goes entirely to its single WP.
-//! - Travel / Other Direct Costs: each item's cost is split evenly across
-//!   every WP it is tagged with.
-//! - Subcontracting: the lump sum goes entirely to its single WP.
+//! - Travel / Other Direct Costs / Subcontracting: each item's cost is split
+//!   evenly across every WP it is tagged with.
 
 use crate::calculation::personnel_cost::WpCostAmount;
 use crate::error::AppError;
@@ -40,7 +39,7 @@ pub struct WpBudgetAmount {
 /// * `equipment_items` — `(work_package_id, amount_eur)` per equipment item (single WP each).
 /// * `travel_items` — `(work_package_ids, amount_eur)` per trip (cost split evenly across WPs).
 /// * `other_cost_items` — `(work_package_ids, amount_eur)` per C3 item (cost split evenly across WPs).
-/// * `subcontracting` — `(work_package_id, amount_eur)` for the single subcontracting lump sum.
+/// * `subcontracting_items` — `(work_package_ids, amount_eur)` per Category B item (cost split evenly across WPs).
 pub fn aggregate_wp_budgets(
     work_package_count: u8,
     work_package_names: &[Option<String>],
@@ -48,7 +47,7 @@ pub fn aggregate_wp_budgets(
     equipment_items: &[(u8, Decimal)],
     travel_items: &[(Vec<u8>, Decimal)],
     other_cost_items: &[(Vec<u8>, Decimal)],
-    subcontracting: (u8, Decimal),
+    subcontracting_items: &[(Vec<u8>, Decimal)],
 ) -> Result<Vec<WpBudgetAmount>, AppError> {
     let n = work_package_count as usize;
     let mut personnel = vec![Decimal::ZERO; n];
@@ -95,8 +94,15 @@ pub fn aggregate_wp_budgets(
         }
     }
 
-    let (sub_wp_id, sub_amount) = subcontracting;
-    add(&mut subcontracting_amounts, sub_wp_id, sub_amount);
+    for (wp_ids, amount) in subcontracting_items {
+        if wp_ids.is_empty() {
+            continue;
+        }
+        let share = *amount / Decimal::from(wp_ids.len() as u32);
+        for &wp_id in wp_ids {
+            add(&mut subcontracting_amounts, wp_id, share);
+        }
+    }
 
     let mut result = Vec::with_capacity(n);
     for i in 0..n {
@@ -143,16 +149,8 @@ mod tests {
                 amount_eur: dec!(3000),
             },
         ]];
-        let result = aggregate_wp_budgets(
-            2,
-            &[None, None],
-            &allocations,
-            &[],
-            &[],
-            &[],
-            (1, Decimal::ZERO),
-        )
-        .unwrap();
+        let result =
+            aggregate_wp_budgets(2, &[None, None], &allocations, &[], &[], &[], &[]).unwrap();
         assert_eq!(result[0].personnel_eur, dec!(5000));
         assert_eq!(result[1].personnel_eur, dec!(3000));
     }
@@ -160,16 +158,8 @@ mod tests {
     #[test]
     fn test_calc_20_equipment_goes_entirely_to_single_wp() {
         let equipment = vec![(2u8, dec!(2500))];
-        let result = aggregate_wp_budgets(
-            2,
-            &[None, None],
-            &[],
-            &equipment,
-            &[],
-            &[],
-            (1, Decimal::ZERO),
-        )
-        .unwrap();
+        let result =
+            aggregate_wp_budgets(2, &[None, None], &[], &equipment, &[], &[], &[]).unwrap();
         assert_eq!(result[0].equipment_eur, Decimal::ZERO);
         assert_eq!(result[1].equipment_eur, dec!(2500));
     }
@@ -177,9 +167,7 @@ mod tests {
     #[test]
     fn test_calc_20_travel_split_evenly_across_multiple_wps() {
         let travel = vec![(vec![1u8, 2u8], dec!(1000))];
-        let result =
-            aggregate_wp_budgets(2, &[None, None], &[], &[], &travel, &[], (1, Decimal::ZERO))
-                .unwrap();
+        let result = aggregate_wp_budgets(2, &[None, None], &[], &[], &travel, &[], &[]).unwrap();
         assert_eq!(result[0].travel_eur, dec!(500));
         assert_eq!(result[1].travel_eur, dec!(500));
     }
@@ -187,27 +175,20 @@ mod tests {
     #[test]
     fn test_calc_20_other_costs_split_evenly_across_multiple_wps() {
         let other = vec![(vec![1u8, 2u8, 3u8], dec!(300))];
-        let result = aggregate_wp_budgets(
-            3,
-            &[None, None, None],
-            &[],
-            &[],
-            &[],
-            &other,
-            (1, Decimal::ZERO),
-        )
-        .unwrap();
+        let result =
+            aggregate_wp_budgets(3, &[None, None, None], &[], &[], &[], &other, &[]).unwrap();
         assert_eq!(result[0].other_costs_eur, dec!(100));
         assert_eq!(result[1].other_costs_eur, dec!(100));
         assert_eq!(result[2].other_costs_eur, dec!(100));
     }
 
     #[test]
-    fn test_calc_20_subcontracting_goes_to_its_single_wp() {
+    fn test_calc_20_subcontracting_split_evenly_across_multiple_wps() {
+        let subcontracting = vec![(vec![1u8, 2u8], dec!(15000))];
         let result =
-            aggregate_wp_budgets(2, &[None, None], &[], &[], &[], &[], (2, dec!(15000))).unwrap();
-        assert_eq!(result[0].subcontracting_eur, Decimal::ZERO);
-        assert_eq!(result[1].subcontracting_eur, dec!(15000));
+            aggregate_wp_budgets(2, &[None, None], &[], &[], &[], &[], &subcontracting).unwrap();
+        assert_eq!(result[0].subcontracting_eur, dec!(7500));
+        assert_eq!(result[1].subcontracting_eur, dec!(7500));
     }
 
     #[test]
@@ -219,6 +200,7 @@ mod tests {
         let equipment = vec![(1u8, dec!(500))];
         let travel = vec![(vec![1u8], dec!(200))];
         let other = vec![(vec![1u8], dec!(100))];
+        let subcontracting = vec![(vec![1u8], dec!(300))];
         let result = aggregate_wp_budgets(
             1,
             &[None],
@@ -226,7 +208,7 @@ mod tests {
             &equipment,
             &travel,
             &other,
-            (1, dec!(300)),
+            &subcontracting,
         )
         .unwrap();
         assert_eq!(result[0].total_eur, dec!(2100));
@@ -235,8 +217,7 @@ mod tests {
     #[test]
     fn test_calc_20_wp_name_is_included() {
         let names = vec![Some("Data Collection".to_string())];
-        let result =
-            aggregate_wp_budgets(1, &names, &[], &[], &[], &[], (1, Decimal::ZERO)).unwrap();
+        let result = aggregate_wp_budgets(1, &names, &[], &[], &[], &[], &[]).unwrap();
         assert_eq!(
             result[0].work_package_name,
             Some("Data Collection".to_string())

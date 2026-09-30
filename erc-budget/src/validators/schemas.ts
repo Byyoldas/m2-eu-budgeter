@@ -1,15 +1,14 @@
 /**
  * Zod schemas for front-end form validation.
  *
- * The 6 schemas shared with the future Execution Application
+ * The 7 schemas shared with the future Execution Application
  * (Milestone 1, Step 9 — see docs/executer/shared-core-roadmap.md §6) live
  * in erc-core/ts/schemas.ts and are re-exported below unchanged. Only the
- * two Budget-App-specific schemas (CFS, Subcontracting) are still
- * hand-written in this file.
+ * Budget-App-specific CFS schema is still hand-written in this file.
  */
 
 import { z } from 'zod';
-import { decimalStr, nonNegDecimalStr } from '../../../erc-core/ts/schemas';
+import { decimalStr } from '../../../erc-core/ts/schemas';
 
 export {
   decimalStr,
@@ -22,6 +21,7 @@ export {
   flatTripSchema,
   tripSchema,
   otherCostSchema,
+  subcontractingItemSchema,
 } from '../../../erc-core/ts/schemas';
 
 export type {
@@ -31,6 +31,7 @@ export type {
   EquipmentItemFormData,
   TripFormData,
   OtherCostFormData,
+  SubcontractingItemFormData,
 } from '../../../erc-core/ts/schemas';
 
 // ─── CFS Item Schema ──────────────────────────────────────────────────────────
@@ -40,12 +41,3 @@ export const cfsItemSchema = z.object({
 });
 
 export type CfsItemFormData = z.infer<typeof cfsItemSchema>;
-
-// ─── Subcontracting Schema ────────────────────────────────────────────────────
-
-export const subcontractingSchema = z.object({
-  amount_eur: nonNegDecimalStr('Subcontracting amount'),
-  work_package_id: z.coerce.number().int().positive('Select a Work Package.'),
-});
-
-export type SubcontractingFormData = z.infer<typeof subcontractingSchema>;

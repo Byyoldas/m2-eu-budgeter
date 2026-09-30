@@ -51,6 +51,7 @@ function makeSummary(overrides: Partial<BudgetSummaryDto> = {}): BudgetSummaryDt
     equipment_detail: [],
     trip_detail: [],
     other_cost_detail: [],
+    subcontracting_detail: [],
     ...overrides,
   };
 }

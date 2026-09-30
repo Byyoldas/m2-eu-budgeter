@@ -291,7 +291,7 @@ fn make_sample_project() -> Project {
         equipment_items: vec![laptop, recorder],
         trips: vec![india_trip, vienna_trip],
         other_cost_items: vec![pub3, pub4, pub5],
-        subcontracting: Subcontracting::default(),
+        subcontracting_items: Vec::new(),
         cfs_warning_dismissed: false,
     }
 }
@@ -718,10 +718,13 @@ fn test_it05_subcontracting_included_in_eligible_and_requested_excluded_from_ind
         project_start_date: None,
     };
     let mut project = Project::new(config);
-    project.subcontracting = Subcontracting {
+    project.subcontracting_items.push(SubcontractingItem {
+        id: Uuid::new_v4(),
+        name: "Subcontracting".to_string(),
         amount_eur: dec!(20000),
-        work_package_id: 1,
-    };
+        notes: None,
+        work_package_ids: vec![1],
+    });
     project.other_cost_items.push(OtherDirectCostItem {
         id: Uuid::new_v4(),
         name: "Publications".to_string(),
