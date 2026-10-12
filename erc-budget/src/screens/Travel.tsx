@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { open as openInBrowser } from '@tauri-apps/plugin-shell';
-import { useProjectStore, useTrips } from '../store/projectStore';
+import { useProjectStore, useTrips, useIsActualCost } from '../store/projectStore';
 import { addTrip, updateTrip, deleteTrip, previewTripCost, getCountries } from '../ipc/commands';
 import { useBudgetSummary, usePreview } from '../hooks/useBudgetSummary';
 import { TripCard } from '../components/TripCard';
@@ -24,14 +24,16 @@ interface TravelProps {
 type Mode = 'list' | 'add' | 'edit';
 type TripKind = 'Itemized' | 'FlatAmount';
 
-const emptyDefaults = {
+// Actual Cost has no Work Packages: a new trip is pre-assigned to the one
+// implicit WP (and the selector is hidden); Lump Sum starts with none picked.
+const emptyDefaultsFor = (isActualCost: boolean) => ({
   name: '', number_of_instances: 1,
   destination_country_code: '', one_way_distance_km: 0,
   number_of_nights: 1, number_of_days: 1,
   domestic_transport_per_instance_eur: '0',
   flat_amount_per_instance_eur: '',
-  work_package_ids: [] as number[],
-};
+  work_package_ids: (isActualCost ? [1] : []) as number[],
+});
 
 const DISTANCE_CALCULATOR_URL =
   'https://commission.europa.eu/funding-and-tenders/procedures-guidelines-tenders/information-contractors-and-beneficiaries/calculate-unit-costs-eligible-travel-costs_en';
@@ -48,6 +50,8 @@ export function Travel({ onNext, onBack }: TravelProps) {
   const rateVersionId = projectConfig?.rate_version_id ?? 'from_2025_05_13';
   const wpCount = projectConfig?.work_package_count ?? 1;
   const wpNames = projectConfig?.work_package_names ?? [];
+  const isActualCost = useIsActualCost();
+  const emptyDefaults = emptyDefaultsFor(isActualCost);
   const storedCountries = useProjectStore((s) => s.countries);
   const setCountries = useProjectStore((s) => s.setCountries);
 
@@ -283,6 +287,7 @@ export function Travel({ onNext, onBack }: TravelProps) {
                 </div>
               )}
 
+              {!isActualCost && (
               <div className="form-field">
                 <label className="form-label required">Work Package(s)</label>
                 <div className="checkbox-grid">
@@ -304,6 +309,7 @@ export function Travel({ onNext, onBack }: TravelProps) {
                 {fieldError('work_package_ids') && <span className="form-error">{fieldError('work_package_ids')}</span>}
                 <span className="form-hint">Cost is split evenly across all selected Work Packages.</span>
               </div>
+              )}
             </div>
             <div className="screen-footer">
               <button type="button" className="btn btn--ghost" onClick={() => setMode('list')}>Cancel</button>

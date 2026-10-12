@@ -105,6 +105,14 @@ export const useSummary = () => useProjectStore((s) => s.summary);
 /** Returns the project configuration or null. */
 export const useProjectConfig = () => useProjectStore((s) => s.projectConfig);
 
+/** The project's funding model; Lump Sum until a project says otherwise. */
+export const useFundingModel = () =>
+  useProjectStore((s) => s.projectConfig?.funding_model ?? 'LumpSum');
+
+/** True for Actual Cost projects: total-cost budget, no Work Packages. */
+export const useIsActualCost = () =>
+  useProjectStore((s) => s.projectConfig?.funding_model === 'ActualCost');
+
 /** Returns the list of personnel roles from the current summary. */
 export const usePersonnelRoles = () =>
   useProjectStore((s) => s.summary?.role_detail ?? []);

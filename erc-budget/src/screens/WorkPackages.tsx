@@ -23,6 +23,29 @@ interface WorkPackagesProps {
   onBack: () => void;
 }
 
+/**
+ * Month ranges no Work Package covers (1-indexed, inclusive). The backend
+ * requires the Work Packages to cover the whole project (overlaps are fine);
+ * checking here lets the user see *which* months are missing before submitting.
+ * A range that is empty, non-numeric or backwards covers nothing.
+ */
+function uncoveredRanges(starts: number[], ends: number[], totalMonths: number): [number, number][] {
+  const covered = new Array<boolean>(totalMonths).fill(false);
+  starts.forEach((start, i) => {
+    const end = ends[i];
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 1 || end < start) return;
+    for (let m = start; m <= Math.min(end, totalMonths); m++) covered[m - 1] = true;
+  });
+  const gaps: [number, number][] = [];
+  for (let m = 1; m <= totalMonths; m++) {
+    if (covered[m - 1]) continue;
+    const from = m;
+    while (m < totalMonths && !covered[m]) m++;
+    gaps.push([from, m]);
+  }
+  return gaps;
+}
+
 interface FormData {
   work_package_names: { name: string }[];
   work_package_start_months: number[];
@@ -32,7 +55,7 @@ interface FormData {
 export function WorkPackages({ onNext, onBack }: WorkPackagesProps) {
   const projectConfig = useProjectStore((s) => s.projectConfig);
   const setProjectConfig = useProjectStore((s) => s.setProjectConfig);
-  const { mutate, isLoading, formError } = useBudgetSummary();
+  const { mutate, isLoading, formError, fieldErrors } = useBudgetSummary();
 
   const count = projectConfig?.work_package_count ?? 1;
   const duration = projectConfig?.duration_years ?? 5;
@@ -54,6 +77,16 @@ export function WorkPackages({ onNext, onBack }: WorkPackagesProps) {
   const watchedNames = watch('work_package_names');
   const watchedStarts = watch('work_package_start_months');
   const watchedEnds = watch('work_package_end_months');
+
+  const gaps = uncoveredRanges(watchedStarts, watchedEnds, durationMonths);
+  const backwards = watchedStarts
+    .map((start, i) => ({ wp: i + 1, start, end: watchedEnds[i] }))
+    .filter(({ start, end }) => Number.isFinite(start) && Number.isFinite(end) && end < start);
+  // Field-level validation errors (e.g. "WP2 duration is invalid", "Month 25
+  // is not covered by any Work Package") have no input of their own on this
+  // screen, so without this they were swallowed and "Next" appeared to do
+  // nothing. Show every distinct message the backend sent.
+  const serverMessages = Array.from(new Set(fieldErrors.map((e) => e.message)));
 
   const handleStartChange = (i: number, value: number) => {
     setValue(`work_package_start_months.${i}`, value);
@@ -89,6 +122,7 @@ export function WorkPackages({ onNext, onBack }: WorkPackagesProps) {
       </div>
 
       {formError && <WarningBanner message={formError} severity="error" />}
+      {serverMessages.length > 0 && <WarningBanner message={serverMessages.join(' ')} severity="error" />}
 
       <form className="screen-form" onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="form-section">
@@ -141,6 +175,19 @@ export function WorkPackages({ onNext, onBack }: WorkPackagesProps) {
           endMonths={watchedEnds}
           durationMonths={durationMonths}
         />
+
+        {backwards.length > 0 && (
+          <WarningBanner
+            severity="warning"
+            message={`${backwards.map(({ wp }) => `WP${wp}`).join(', ')}: the end month is before the start month.`}
+          />
+        )}
+        {gaps.length > 0 && (
+          <WarningBanner
+            severity="warning"
+            message={`${gaps.map(([a, b]) => (a === b ? `Month ${a}` : `Months ${a}–${b}`)).join(', ')} not covered by any Work Package. The Work Packages must together cover the whole ${durationMonths}-month project (overlaps are fine).`}
+          />
+        )}
 
         <div className="screen-footer">
           <button type="button" className="btn btn--ghost" onClick={onBack}>← Back</button>

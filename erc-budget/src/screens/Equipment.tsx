@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { equipmentItemSchema, type EquipmentItemFormData } from '../validators/schemas';
-import { useProjectStore, useEquipmentItems } from '../store/projectStore';
+import { useProjectStore, useEquipmentItems, useIsActualCost } from '../store/projectStore';
 import {
   addEquipmentItem, updateEquipmentItem, deleteEquipmentItem,
   previewEquipmentDepreciation,
@@ -36,6 +36,9 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
   const projectConfig = useProjectStore((s) => s.projectConfig);
   const wpCount = projectConfig?.work_package_count ?? 1;
   const wpNames = projectConfig?.work_package_names ?? [];
+  // Actual Cost has no Work Packages: items always belong to the one implicit WP.
+  const isActualCost = useIsActualCost();
+  const blankDefaults: Partial<EquipmentItemFormData> = isActualCost ? { work_package_id: 1 } : {};
 
   const [mode, setMode] = useState<Mode>('list');
   const [editingItem, setEditingItem] = useState<EquipmentItemDetailDto | null>(null);
@@ -49,6 +52,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
     formState: { errors },
   } = useForm<EquipmentItemFormData>({
     resolver: zodResolver(equipmentItemSchema),
+    defaultValues: blankDefaults,
   });
 
   const watched = watch();
@@ -67,7 +71,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
           useful_lifetime_months: lifetime,
           grant_usage_pct: watched.grant_usage_pct,
           grant_usage_months: usageMonths,
-          work_package_id: Number(watched.work_package_id),
+          work_package_id: isActualCost ? 1 : Number(watched.work_package_id),
         })
       );
       setPreviewResult(result);
@@ -79,7 +83,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
     fieldErrors.find((e) => e.field === field)?.message ??
     (errors as Record<string, { message?: string }>)[field]?.message;
 
-  const openAdd = () => { reset({}); setEditingItem(null); setPreviewResult(null); setMode('add'); };
+  const openAdd = () => { reset(blankDefaults); setEditingItem(null); setPreviewResult(null); setMode('add'); };
 
   const openEdit = (item: EquipmentItemDetailDto) => {
     setEditingItem(item);
@@ -107,7 +111,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
       useful_lifetime_months: Number(data.useful_lifetime_months),
       grant_usage_pct: data.grant_usage_pct,
       grant_usage_months: Number(data.grant_usage_months),
-      work_package_id: Number(data.work_package_id),
+      work_package_id: isActualCost ? 1 : Number(data.work_package_id),
     };
     const command = editingItem
       ? () => updateEquipmentItem(editingItem.id, input)
@@ -172,6 +176,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
                   {fieldError('grant_usage_months') && <span className="form-error">{fieldError('grant_usage_months')}</span>}
                 </div>
               </div>
+              {!isActualCost && (
               <div className="form-field">
                 <label htmlFor="eq-wp" className="form-label required">
                   Work Package (Select the WP in which the initial purchase is made)
@@ -188,6 +193,7 @@ export function Equipment({ onNext, onBack }: EquipmentProps) {
                 </select>
                 {fieldError('work_package_id') && <span className="form-error">{fieldError('work_package_id')}</span>}
               </div>
+              )}
             </div>
             <div className="screen-footer">
               <button type="button" className="btn btn--ghost" onClick={() => setMode('list')}>Cancel</button>

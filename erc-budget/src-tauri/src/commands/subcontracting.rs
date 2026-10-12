@@ -22,6 +22,13 @@ pub fn add_subcontracting_item(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
+    // Actual Cost projects have no Work Packages: the item always belongs to
+    // the single implicit WP, whatever the form sent.
+    let mut input = input;
+    if project.config.is_actual_cost() {
+        input.work_package_ids = vec![1];
+    }
+
     validate_subcontracting_item(
         &input,
         project.config.work_package_count,
@@ -54,6 +61,13 @@ pub fn update_subcontracting_item(
 ) -> Result<BudgetSummaryDto, AppError> {
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
+
+    // Actual Cost projects have no Work Packages: the item always belongs to
+    // the single implicit WP, whatever the form sent.
+    let mut input = input;
+    if project.config.is_actual_cost() {
+        input.work_package_ids = vec![1];
+    }
 
     {
         let others: Vec<_> = project

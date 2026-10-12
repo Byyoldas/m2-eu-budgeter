@@ -16,10 +16,14 @@
  * hand-written in this file.
  */
 
+import type { FundingModel } from '../../../erc-core/bindings/FundingModel';
+
 // ─── Enums ─────────────────────────────────────────────────────────────────────
 
 export type { RoleType } from '../../../erc-core/bindings/RoleType';
 export type { CfsStatus } from '../../../erc-core/bindings/CfsStatus';
+export type { FundingModel } from '../../../erc-core/bindings/FundingModel';
+export type { SalaryCurrency } from '../../../erc-core/bindings/SalaryCurrency';
 
 // ─── Trip Types ─────────────────────────────────────────────────────────────────
 
@@ -84,6 +88,14 @@ export const SCREENS: Screen[] = [
   'subcontracting',
   'review-export',
 ];
+
+/**
+ * The wizard steps that apply to a funding model. Actual Cost projects have
+ * no Work Packages, so they skip the Work Packages step entirely.
+ */
+export function screensFor(model: FundingModel | undefined): Screen[] {
+  return model === 'ActualCost' ? SCREENS.filter((s) => s !== 'work-packages') : SCREENS;
+}
 
 export const SCREEN_LABELS: Record<Screen, string> = {
   'welcome': 'Welcome',

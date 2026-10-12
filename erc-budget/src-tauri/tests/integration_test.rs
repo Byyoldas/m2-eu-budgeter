@@ -164,6 +164,7 @@ fn make_sample_project() -> Project {
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
         project_start_date: None,
+        funding_model: FundingModel::LumpSum,
     };
 
     // PI: 227,900 TRY/month, FTE 0.70, months 1-60 (all 5 years), 20% inflation
@@ -172,6 +173,7 @@ fn make_sample_project() -> Project {
         role_label: "PI".to_string(),
         role_type: RoleType::Pi,
         current_monthly_salary_try: dec!(227900),
+        salary_currency: SalaryCurrency::Try,
         fte_fraction: dec!(0.70),
         inflation_rate_pct: dec!(20),
         start_month: 1,
@@ -184,6 +186,7 @@ fn make_sample_project() -> Project {
         role_label: "PostDoc-1".to_string(),
         role_type: RoleType::PostDoc,
         current_monthly_salary_try: dec!(151860),
+        salary_currency: SalaryCurrency::Try,
         fte_fraction: dec!(1.0),
         inflation_rate_pct: dec!(20),
         start_month: 13,
@@ -196,6 +199,7 @@ fn make_sample_project() -> Project {
         role_label: "Expert-1".to_string(),
         role_type: RoleType::Expert,
         current_monthly_salary_try: dec!(138000),
+        salary_currency: SalaryCurrency::Try,
         fte_fraction: dec!(0.40),
         inflation_rate_pct: dec!(20),
         start_month: 1,
@@ -600,6 +604,7 @@ fn test_it02_empty_project_all_zeros() {
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
         project_start_date: None,
+        funding_model: FundingModel::LumpSum,
     };
     let project = Project::new(config);
     let rate_data = make_rate_data();
@@ -633,12 +638,14 @@ fn test_it03_one_year_project() {
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
         project_start_date: None,
+        funding_model: FundingModel::LumpSum,
     };
     let pi = PersonnelRole {
         id: Uuid::new_v4(),
         role_label: "PI".to_string(),
         role_type: RoleType::Pi,
         current_monthly_salary_try: dec!(50000), // €1,000/month
+        salary_currency: SalaryCurrency::Try,
         fte_fraction: dec!(1.0),
         inflation_rate_pct: dec!(0),
         start_month: 1,
@@ -675,6 +682,7 @@ fn test_it04_flat_amount_trip() {
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
         project_start_date: None,
+        funding_model: FundingModel::LumpSum,
     };
     let flat_trip = Trip {
         id: Uuid::new_v4(),
@@ -716,6 +724,7 @@ fn test_it05_subcontracting_included_in_eligible_and_requested_excluded_from_ind
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
         project_start_date: None,
+        funding_model: FundingModel::LumpSum,
     };
     let mut project = Project::new(config);
     project.subcontracting_items.push(SubcontractingItem {
@@ -755,6 +764,232 @@ fn test_it05_subcontracting_included_in_eligible_and_requested_excluded_from_ind
     assert_eq!(wp1.subcontracting_eur, dec!(20000));
 }
 
+// ─── IT-07: Actual Cost funding + EUR salaries ────────────────────────────────
+
+fn make_role(
+    label: &str,
+    salary: Decimal,
+    currency: SalaryCurrency,
+    start: u32,
+    end: u32,
+) -> PersonnelRole {
+    PersonnelRole {
+        id: Uuid::new_v4(),
+        role_label: label.to_string(),
+        role_type: RoleType::Expert,
+        current_monthly_salary_try: salary,
+        salary_currency: currency,
+        fte_fraction: dec!(1.0),
+        inflation_rate_pct: dec!(0),
+        start_month: start,
+        end_month: end,
+    }
+}
+
+#[test]
+fn test_it07_actual_cost_project_is_one_total_with_eur_salary_untouched_by_try_rate() {
+    // A deliberately absurd TRY rate (1000 TRY per EUR) and a stale 4-WP /
+    // gapped-timeline config: neither may matter. The EUR role is taken at
+    // face value (€1,000/month x 12 = €12,000); the TRY role is 50,000 TRY
+    // / 1000 = €50/month x 12 = €600. Actual Cost collapses the Work
+    // Packages to one implicit WP, so that single bucket IS the project total.
+    let config = ProjectConfig {
+        project_title: "Actual Cost".to_string(),
+        pi_name: "PI".to_string(),
+        call_reference: "ERC-2025-CoG".to_string(),
+        duration_years: 1,
+        work_package_count: 4,
+        work_package_names: vec![None, None, None, None],
+        work_package_start_months: vec![1, 1, 1, 1],
+        work_package_end_months: vec![6, 6, 6, 6],
+        default_inflation_rate_pct: dec!(0),
+        try_eur_rate: dec!(1000),
+        indirect_cost_rate_pct: dec!(25),
+        rate_version_id: "v_from_2025_05_13".to_string(),
+        call_opening_date: None,
+        project_start_date: None,
+        funding_model: FundingModel::ActualCost,
+    };
+    let mut project = Project::new(config);
+    project.personnel_roles.push(make_role(
+        "EUR role",
+        dec!(1000),
+        SalaryCurrency::Eur,
+        1,
+        12,
+    ));
+    project.personnel_roles.push(make_role(
+        "TRY role",
+        dec!(50000),
+        SalaryCurrency::Try,
+        1,
+        12,
+    ));
+    project.other_cost_items.push(OtherDirectCostItem {
+        id: Uuid::new_v4(),
+        name: "Consumables".to_string(),
+        amount_eur: dec!(1000),
+        is_cfs_item: false,
+        notes: None,
+        work_package_ids: vec![1],
+    });
+
+    let summary = calculate_budget_summary(&project, &make_rate_data()).unwrap();
+
+    assert_eq!(summary.category_a_total, dec!(12600));
+    assert_eq!(summary.role_detail[0].total_cost_eur, dec!(12000));
+    assert_eq!(summary.role_detail[0].salary_currency, SalaryCurrency::Eur);
+    assert_eq!(summary.role_detail[1].total_cost_eur, dec!(600));
+    assert_eq!(summary.category_c3_total, dec!(1000));
+
+    // One implicit WP, and its total equals the project's direct costs —
+    // nothing was lost to the (absent) WP timeline.
+    assert_eq!(summary.wp_budgets.len(), 1);
+    assert_eq!(summary.wp_budgets[0].personnel_eur, dec!(12600));
+    assert_eq!(summary.wp_budgets[0].other_costs_eur, dec!(1000));
+    assert_eq!(summary.wp_budgets[0].total_eur, summary.total_direct_costs);
+}
+
+#[test]
+fn test_it07_eur_salary_inflates_like_a_converted_try_salary() {
+    // The same €1,000/month, once as a EUR entry and once as 50,000 TRY at
+    // 50 TRY/EUR, must produce identical cost through the inflation chain.
+    let make = |salary, currency| {
+        let config = ProjectConfig {
+            project_title: "Currency parity".to_string(),
+            pi_name: "PI".to_string(),
+            call_reference: "ERC-2025-CoG".to_string(),
+            duration_years: 2,
+            work_package_count: 1,
+            work_package_names: vec![None],
+            work_package_start_months: vec![1],
+            work_package_end_months: vec![24],
+            default_inflation_rate_pct: dec!(10),
+            try_eur_rate: dec!(50),
+            indirect_cost_rate_pct: dec!(25),
+            rate_version_id: "v_from_2025_05_13".to_string(),
+            call_opening_date: None,
+            project_start_date: None,
+            funding_model: FundingModel::LumpSum,
+        };
+        let mut project = Project::new(config);
+        let mut role = make_role("R", salary, currency, 1, 24);
+        role.inflation_rate_pct = dec!(10);
+        project.personnel_roles.push(role);
+        calculate_budget_summary(&project, &make_rate_data())
+            .unwrap()
+            .category_a_total
+    };
+    assert_eq!(
+        make(dec!(1000), SalaryCurrency::Eur),
+        make(dec!(50000), SalaryCurrency::Try)
+    );
+}
+
+#[test]
+fn test_it07_switching_actual_cost_to_lump_sum_yields_a_real_per_wp_budget() {
+    // Built as Actual Cost (one implicit WP), then switched to Lump Sum with
+    // three real Work Packages — the same field changes update_project_config
+    // makes. Nothing may be lost, and the per-WP view must come alive.
+    let config = ProjectConfig {
+        project_title: "Switch".to_string(),
+        pi_name: "PI".to_string(),
+        call_reference: "ERC-2025-CoG".to_string(),
+        duration_years: 5,
+        work_package_count: 1,
+        work_package_names: vec![None],
+        work_package_start_months: vec![1],
+        work_package_end_months: vec![60],
+        default_inflation_rate_pct: dec!(0),
+        try_eur_rate: dec!(50),
+        indirect_cost_rate_pct: dec!(25),
+        rate_version_id: "v_from_2025_05_13".to_string(),
+        call_opening_date: None,
+        project_start_date: None,
+        funding_model: FundingModel::ActualCost,
+    };
+    let mut project = Project::new(config);
+    project
+        .personnel_roles
+        .push(make_role("R", dec!(1000), SalaryCurrency::Eur, 1, 60));
+    project.other_cost_items.push(OtherDirectCostItem {
+        id: Uuid::new_v4(),
+        name: "Consumables".to_string(),
+        amount_eur: dec!(900),
+        is_cfs_item: false,
+        notes: None,
+        work_package_ids: vec![1],
+    });
+
+    let actual = calculate_budget_summary(&project, &make_rate_data()).unwrap();
+    assert_eq!(actual.wp_budgets.len(), 1);
+
+    project.config.funding_model = FundingModel::LumpSum;
+    project.config.work_package_count = 3;
+    project.config.work_package_names = vec![None, None, None];
+    project.config.work_package_start_months = vec![1, 25, 49];
+    project.config.work_package_end_months = vec![24, 48, 60];
+    project.enforce_funding_model(); // no-op for Lump Sum: must not undo the switch
+
+    let lump = calculate_budget_summary(&project, &make_rate_data()).unwrap();
+    assert_eq!(
+        lump.category_a_total, actual.category_a_total,
+        "the switch must not change any total"
+    );
+    assert_eq!(lump.total_direct_costs, actual.total_direct_costs);
+    assert_eq!(lump.wp_budgets.len(), 3);
+    // €1,000 x months in each WP; the item was filed under WP1 and stays there.
+    assert_eq!(lump.wp_budgets[0].personnel_eur, dec!(24000));
+    assert_eq!(lump.wp_budgets[1].personnel_eur, dec!(24000));
+    assert_eq!(lump.wp_budgets[2].personnel_eur, dec!(12000));
+    assert_eq!(lump.wp_budgets[0].other_costs_eur, dec!(900));
+}
+
+#[test]
+fn test_it07_overlapping_wps_split_the_full_pool_and_sum_to_the_role_total() {
+    // The scenario from a real Excel export whose Unattributed column was
+    // non-zero (that was an Excel-formula bug; the backend was always right).
+    // WP2 (13-24) and WP3 (18-60) overlap in months 18-24. Role: months 1-60,
+    // FTE 0.5, EUR 10,000/month -> 6.0 PM and 60,000 per year, 300,000 total.
+    let config = ProjectConfig {
+        project_title: "Overlap".to_string(),
+        pi_name: "PI".to_string(),
+        call_reference: "ERC-2025-CoG".to_string(),
+        duration_years: 5,
+        work_package_count: 3,
+        work_package_names: vec![None, None, None],
+        work_package_start_months: vec![1, 13, 18],
+        work_package_end_months: vec![12, 24, 60],
+        default_inflation_rate_pct: dec!(0),
+        try_eur_rate: dec!(50),
+        indirect_cost_rate_pct: dec!(25),
+        rate_version_id: "v_from_2025_05_13".to_string(),
+        call_opening_date: None,
+        project_start_date: None,
+        funding_model: FundingModel::LumpSum,
+    };
+    let mut project = Project::new(config);
+    let mut role = make_role("R", dec!(10000), SalaryCurrency::Eur, 1, 60);
+    role.fte_fraction = dec!(0.5);
+    project.personnel_roles.push(role);
+
+    let summary = calculate_budget_summary(&project, &make_rate_data()).unwrap();
+    let detail = &summary.role_detail[0];
+    let wp = |id: u8| {
+        detail
+            .wp_breakdown
+            .iter()
+            .find(|w| w.work_package_id == id)
+            .map(|w| w.amount_eur)
+            .unwrap()
+    };
+    assert_eq!(detail.total_cost_eur, dec!(300000));
+    assert_eq!(wp(1), dec!(60000));
+    assert_eq!(wp(2), dec!(42500)); // 4.25 of year 2's 6.0 PM
+    assert_eq!(wp(3), dec!(197500)); // 1.75 of year 2 + years 3-5 in full
+    assert_eq!(wp(1) + wp(2) + wp(3), detail.total_cost_eur);
+}
+
 #[test]
 fn test_it06_personnel_wp_allocation_multi_year_multi_inflation() {
     // 3-year (36-month) project, 2 Work Packages that each span two project
@@ -776,6 +1011,7 @@ fn test_it06_personnel_wp_allocation_multi_year_multi_inflation() {
         rate_version_id: "v_from_2025_05_13".to_string(),
         call_opening_date: None,
         project_start_date: None,
+        funding_model: FundingModel::LumpSum,
     };
 
     // RoleA: base 100 EUR/month (5000 TRY / 50), 10% inflation, active the
@@ -792,6 +1028,7 @@ fn test_it06_personnel_wp_allocation_multi_year_multi_inflation() {
         role_label: "RoleA".to_string(),
         role_type: RoleType::Expert,
         current_monthly_salary_try: dec!(5000),
+        salary_currency: SalaryCurrency::Try,
         fte_fraction: dec!(1.0),
         inflation_rate_pct: dec!(10),
         start_month: 1,
@@ -812,6 +1049,7 @@ fn test_it06_personnel_wp_allocation_multi_year_multi_inflation() {
         role_label: "RoleB".to_string(),
         role_type: RoleType::PostDoc,
         current_monthly_salary_try: dec!(8000),
+        salary_currency: SalaryCurrency::Try,
         fte_fraction: dec!(1.0),
         inflation_rate_pct: dec!(25),
         start_month: 10,

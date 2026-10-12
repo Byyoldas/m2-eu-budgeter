@@ -18,7 +18,7 @@ use crate::calculation::{
         aggregate_personnel_costs, allocate_personnel_cost_by_wp, calculate_personnel_cost_lines,
         WpCostAmount,
     },
-    salary_projection::{convert_try_to_eur, project_salary_chain},
+    salary_projection::{monthly_salary_to_eur, project_salary_chain},
     trip_cost::{
         aggregate_travel_costs, calculate_flat_trip_cost, calculate_itemized_trip_cost,
         TripCostResult,
@@ -86,8 +86,11 @@ pub fn calculate_budget_summary(
 
     for role in &project.personnel_roles {
         let inflation_pct = role.inflation_rate_pct;
-        let base_eur =
-            convert_try_to_eur(role.current_monthly_salary_try, project.config.try_eur_rate)?;
+        let base_eur = monthly_salary_to_eur(
+            role.current_monthly_salary_try,
+            role.salary_currency,
+            project.config.try_eur_rate,
+        )?;
         let projections = project_salary_chain(base_eur, inflation_pct, duration)?;
         let cost_lines = calculate_personnel_cost_lines(
             &projections,
@@ -124,6 +127,7 @@ pub fn calculate_budget_summary(
             role_label: role.role_label.clone(),
             role_type: role.role_type.clone(),
             current_monthly_salary_try: role.current_monthly_salary_try,
+            salary_currency: role.salary_currency,
             inflation_rate_pct: role.inflation_rate_pct,
             fte_fraction: role.fte_fraction,
             start_month: role.start_month,

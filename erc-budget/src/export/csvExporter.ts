@@ -32,7 +32,10 @@ export async function exportToCsv(
   summary: BudgetSummaryDto,
   config: ProjectConfigInput | null,
 ): Promise<void> {
-  const wpBudgets = summary.wp_budgets;
+  // Actual Cost has no Work-Package breakdown: category totals only, and no
+  // Work Package column on trips. All WP name lookups still use the full list.
+  const isActualCost = config?.funding_model === 'ActualCost';
+  const wpBudgets = isActualCost ? [] : summary.wp_budgets;
   const lines: string[] = [];
 
   // Project header
@@ -98,11 +101,13 @@ export async function exportToCsv(
   if (summary.trip_detail.length > 0) {
     lines.push('');
     lines.push(row('TRAVEL DETAIL'));
-    lines.push(row('Trip', 'Work Package(s)', 'Instances', 'Per Instance', 'Total'));
+    lines.push(row('Trip', ...(isActualCost ? [] : ['Work Package(s)']), 'Instances', 'Per Instance', 'Total'));
     for (const trip of summary.trip_detail) {
       lines.push(row(
         trip.name,
-        trip.work_package_ids.map((id) => wpBudgets.find((w) => w.work_package_id === id)?.work_package_name || `WP${id}`).join(', '),
+        ...(isActualCost ? [] : [
+          trip.work_package_ids.map((id) => summary.wp_budgets.find((w) => w.work_package_id === id)?.work_package_name || `WP${id}`).join(', '),
+        ]),
         trip.number_of_instances,
         n(trip.per_instance_total_eur),
         n(trip.total_trip_cost_eur),

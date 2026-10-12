@@ -28,26 +28,18 @@ import { OtherCosts } from './screens/OtherCosts';
 import { Subcontracting } from './screens/Subcontracting';
 import { ReviewExport } from './screens/ReviewExport';
 
-import type { Screen } from './types';
+import { screensFor, type Screen } from './types';
 import './App.css';
 
-const STEP_ORDER: Screen[] = [
-  'project-setup',
-  'budget-settings',
-  'work-packages',
-  'personnel',
-  'equipment',
-  'travel',
-  'other-costs',
-  'subcontracting',
-  'review-export',
-];
 
 export function App() {
   const screen = useProjectStore((s) => s.screen);
   const setScreen = useProjectStore((s) => s.setScreen);
   const setRateVersions = useProjectStore((s) => s.setRateVersions);
   const summary = useProjectStore((s) => s.summary);
+  const fundingModel = useProjectStore((s) => s.projectConfig?.funding_model);
+  // Actual Cost projects skip the Work Packages step.
+  const STEP_ORDER: Screen[] = screensFor(fundingModel);
 
   // Activate auto-save; also drives the sidebar's manual Save button
   const { saveNow } = useAutoSave();
@@ -89,7 +81,7 @@ export function App() {
           <CategoryTotalsPanel />
           {summary && (
             <>
-              <BudgetWpBarChart />
+              {fundingModel !== 'ActualCost' && <BudgetWpBarChart />}
               <BudgetRingChart />
             </>
           )}

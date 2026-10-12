@@ -4,6 +4,7 @@
 //! Converts a monthly TRY salary to EUR and computes the year-by-year
 //! projected monthly salary for all project years, applying compounding inflation.
 
+use crate::domain::entities::SalaryCurrency;
 use crate::error::{calc_error, AppError};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,30 @@ pub fn convert_try_to_eur(
         ));
     }
     Ok(monthly_salary_try / try_eur_rate)
+}
+
+/// CALC-01 (currency-aware): resolve a role's entered monthly salary to EUR.
+///
+/// A `TRY` salary is converted at `try_eur_rate` (CALC-01 proper). An `EUR`
+/// salary is already in the calculation currency, so it passes through
+/// untouched — the TRY→EUR rate plays no part in that role's cost.
+pub fn monthly_salary_to_eur(
+    amount: Decimal,
+    currency: SalaryCurrency,
+    try_eur_rate: Decimal,
+) -> Result<Decimal, AppError> {
+    match currency {
+        SalaryCurrency::Try => convert_try_to_eur(amount, try_eur_rate),
+        SalaryCurrency::Eur => {
+            if amount <= Decimal::ZERO {
+                return Err(calc_error(
+                    "INVALID_SALARY_EUR",
+                    "Monthly salary must be greater than zero.",
+                ));
+            }
+            Ok(amount)
+        }
+    }
 }
 
 // ─── CALC-02 ─────────────────────────────────────────────────────────────────
@@ -127,6 +152,28 @@ mod tests {
     use rust_decimal_macros::dec;
 
     // ── CALC-01 tests ──
+
+    #[test]
+    fn test_calc_01_eur_salary_passes_through_without_conversion() {
+        // A EUR salary is already in the calculation currency: the TRY rate
+        // must play no part (a nonsense rate of 1000 must not change it).
+        let eur = monthly_salary_to_eur(dec!(4000), SalaryCurrency::Eur, dec!(1000)).unwrap();
+        assert_eq!(eur, dec!(4000));
+    }
+
+    #[test]
+    fn test_calc_01_try_salary_still_converts_via_currency_aware_entry_point() {
+        let eur = monthly_salary_to_eur(dec!(5000), SalaryCurrency::Try, dec!(50)).unwrap();
+        assert_eq!(eur, dec!(100));
+    }
+
+    #[test]
+    fn test_calc_01_eur_salary_must_be_positive() {
+        let result = monthly_salary_to_eur(dec!(0), SalaryCurrency::Eur, dec!(50));
+        assert!(
+            matches!(result, Err(AppError::Calculation { code, .. }) if code == "INVALID_SALARY_EUR")
+        );
+    }
 
     #[test]
     fn test_calc_01_pi_salary_conversion() {

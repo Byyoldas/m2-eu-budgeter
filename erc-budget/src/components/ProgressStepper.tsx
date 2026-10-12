@@ -3,10 +3,8 @@
  * Clicking a completed step navigates to it.
  */
 
-import { SCREENS, SCREEN_LABELS, type Screen } from '../types';
+import { screensFor, SCREEN_LABELS, type Screen } from '../types';
 import { useProjectStore } from '../store/projectStore';
-
-const STEP_SCREENS: Screen[] = SCREENS.filter((s) => s !== 'welcome');
 
 interface ProgressStepperProps {
   onNavigate: (screen: Screen) => void;
@@ -16,6 +14,9 @@ export function ProgressStepper({ onNavigate }: ProgressStepperProps) {
   const currentScreen = useProjectStore((s) => s.screen);
   const summary = useProjectStore((s) => s.summary);
   const hasProject = summary !== null;
+  const fundingModel = useProjectStore((s) => s.projectConfig?.funding_model);
+  // Actual Cost projects have no Work Packages step.
+  const STEP_SCREENS: Screen[] = screensFor(fundingModel);
 
   const currentIdx = STEP_SCREENS.indexOf(currentScreen as Screen);
 

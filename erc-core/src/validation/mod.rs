@@ -13,7 +13,7 @@ use crate::domain::dto::{
     TripInputDto,
 };
 use crate::domain::entities::{
-    OtherDirectCostItem, PersonnelRole, RoleType, SubcontractingItem, TripType,
+    FundingModel, OtherDirectCostItem, PersonnelRole, RoleType, SubcontractingItem, TripType,
 };
 use crate::error::{AppError, FieldError, ValidationErrors};
 use rust_decimal::Decimal;
@@ -75,7 +75,7 @@ pub fn validate_personnel_role(
     if dto.current_monthly_salary_try <= Decimal::ZERO {
         errors.push(FieldError::new(
             "current_monthly_salary_try",
-            "INVALID_SALARY_TRY",
+            "INVALID_SALARY",
             "Monthly salary must be greater than zero.",
         ));
     }
@@ -403,7 +403,12 @@ pub fn validate_project_config(dto: &crate::domain::dto::ProjectConfigDto) -> Re
         ));
     }
 
-    if dto.work_package_count < 1 || dto.work_package_count > 20 {
+    // Actual Cost projects have no Work Packages of their own — the backend
+    // collapses them to one implicit WP — so whatever WP values the form
+    // carried (hidden or stale) are irrelevant and must not block saving.
+    let wp_checks_apply = dto.funding_model != FundingModel::ActualCost;
+
+    if wp_checks_apply && (dto.work_package_count < 1 || dto.work_package_count > 20) {
         errors.push(FieldError::new(
             "work_package_count",
             "INVALID_WP_COUNT",
@@ -411,7 +416,9 @@ pub fn validate_project_config(dto: &crate::domain::dto::ProjectConfigDto) -> Re
         ));
     }
 
-    if !dto.work_package_start_months.is_empty() || !dto.work_package_end_months.is_empty() {
+    if wp_checks_apply
+        && (!dto.work_package_start_months.is_empty() || !dto.work_package_end_months.is_empty())
+    {
         if dto.work_package_start_months.len() != dto.work_package_count as usize
             || dto.work_package_end_months.len() != dto.work_package_count as usize
         {
@@ -518,6 +525,7 @@ mod tests {
         EquipmentItemInputDto, OtherCostInputDto, PersonnelRoleInputDto, ProjectConfigDto,
         TripInputDto,
     };
+    use crate::domain::entities::SalaryCurrency;
     use crate::domain::entities::{PersonnelRole, RoleType, TripType};
     use rust_decimal_macros::dec;
     use uuid::Uuid;
@@ -541,6 +549,7 @@ mod tests {
             rate_version_id: "v_from_2025_05_13".to_string(),
             call_opening_date: None,
             project_start_date: None,
+            funding_model: FundingModel::LumpSum,
         }
     }
 
@@ -557,6 +566,7 @@ mod tests {
             role_label: label.to_string(),
             role_type,
             current_monthly_salary_try: salary.parse().unwrap(),
+            salary_currency: SalaryCurrency::Try,
             fte_fraction: fte.parse().unwrap(),
             inflation_rate_pct: inflation.parse().unwrap(),
             start_month,
@@ -570,6 +580,7 @@ mod tests {
             role_label: label.to_string(),
             role_type,
             current_monthly_salary_try: dec!(100000),
+            salary_currency: SalaryCurrency::Try,
             fte_fraction: dec!(1),
             inflation_rate_pct: dec!(20),
             start_month: 1,
@@ -673,7 +684,7 @@ mod tests {
         assert!(has_field_error(
             &result,
             "current_monthly_salary_try",
-            "INVALID_SALARY_TRY"
+            "INVALID_SALARY"
         ));
     }
 
@@ -1070,6 +1081,31 @@ mod tests {
     #[test]
     fn test_val_cfg_valid_5_year_project() {
         assert!(validate_project_config(&make_config_dto(5)).is_ok());
+    }
+
+    #[test]
+    fn test_val_cfg_actual_cost_ignores_work_package_fields() {
+        // Actual Cost has no Work Packages: stale/hidden WP values from the
+        // form (here an out-of-range count and a gap in coverage) must not
+        // block saving.
+        let mut dto = make_config_dto(5);
+        dto.funding_model = FundingModel::ActualCost;
+        dto.work_package_count = 99;
+        dto.work_package_start_months = vec![1];
+        dto.work_package_end_months = vec![6];
+        assert!(validate_project_config(&dto).is_ok());
+    }
+
+    #[test]
+    fn test_val_cfg_lump_sum_still_rejects_bad_work_package_count() {
+        let mut dto = make_config_dto(5);
+        dto.funding_model = FundingModel::LumpSum;
+        dto.work_package_count = 99;
+        assert!(has_field_error(
+            &validate_project_config(&dto),
+            "work_package_count",
+            "INVALID_WP_COUNT"
+        ));
     }
 
     #[test]

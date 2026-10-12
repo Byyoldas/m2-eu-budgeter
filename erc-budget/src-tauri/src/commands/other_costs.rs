@@ -27,6 +27,13 @@ pub fn add_other_cost(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
+    // Actual Cost projects have no Work Packages: the item always belongs to
+    // the single implicit WP, whatever the form sent.
+    let mut input = input;
+    if project.config.is_actual_cost() {
+        input.work_package_ids = vec![1];
+    }
+
     validate_other_cost(
         &input,
         project.config.work_package_count,
@@ -60,6 +67,13 @@ pub fn update_other_cost(
 ) -> Result<BudgetSummaryDto, AppError> {
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
+
+    // Actual Cost projects have no Work Packages: the item always belongs to
+    // the single implicit WP, whatever the form sent.
+    let mut input = input;
+    if project.config.is_actual_cost() {
+        input.work_package_ids = vec![1];
+    }
 
     {
         // Build a list of existing items excluding this one for uniqueness check
@@ -134,6 +148,12 @@ pub fn add_cfs_item(
 ) -> Result<BudgetSummaryDto, AppError> {
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
+
+    let work_package_ids = if project.config.is_actual_cost() {
+        vec![1]
+    } else {
+        work_package_ids
+    };
 
     // Guard: prevent adding a second CFS item
     if project.has_cfs_item() {

@@ -4,7 +4,7 @@ use crate::calculation::calculate_budget_summary;
 use crate::calculation::personnel_cost::{
     allocate_personnel_cost_by_wp, calculate_personnel_cost_lines,
 };
-use crate::calculation::salary_projection::{convert_try_to_eur, project_salary_chain};
+use crate::calculation::salary_projection::{monthly_salary_to_eur, project_salary_chain};
 use crate::domain::dto::{
     BudgetSummaryDto, PersonnelRoleInputDto, RoleCostLineDto, RoleCostPreviewDto, WpCostAmountDto,
 };
@@ -38,6 +38,7 @@ pub fn add_personnel_role(
         role_label: input.role_label,
         role_type: input.role_type,
         current_monthly_salary_try: input.current_monthly_salary_try,
+        salary_currency: input.salary_currency,
         fte_fraction: input.fte_fraction,
         inflation_rate_pct: input.inflation_rate_pct,
         start_month: input.start_month,
@@ -80,6 +81,7 @@ pub fn update_personnel_role(
     role.role_label = input.role_label;
     role.role_type = input.role_type;
     role.current_monthly_salary_try = input.current_monthly_salary_try;
+    role.salary_currency = input.salary_currency;
     role.fte_fraction = input.fte_fraction;
     role.inflation_rate_pct = input.inflation_rate_pct;
     role.start_month = input.start_month;
@@ -129,8 +131,9 @@ pub fn preview_role_cost(
     let lock = state.project.lock().unwrap();
     let project = lock.as_ref().ok_or(AppError::NoProject)?;
 
-    let base_eur = convert_try_to_eur(
+    let base_eur = monthly_salary_to_eur(
         input.current_monthly_salary_try,
+        input.salary_currency,
         project.config.try_eur_rate,
     )?;
 

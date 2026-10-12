@@ -72,6 +72,7 @@ function makeConfig(): ProjectConfigInput {
     rate_version_id: 'v_from_2025_05_13',
     call_opening_date: null,
     project_start_date: null,
+    funding_model: 'LumpSum',
   };
 }
 
@@ -189,7 +190,7 @@ describe('setSummary', () => {
         id: 'uuid-1',
         role_label: 'PI',
         role_type: 'Pi',
-        current_monthly_salary_try: '227900',
+        current_monthly_salary_try: '227900', salary_currency: 'TRY',
         inflation_rate_pct: '20',
         fte_fraction: '0.70',
         start_month: 1,

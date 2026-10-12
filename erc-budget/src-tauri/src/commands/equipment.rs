@@ -20,6 +20,13 @@ pub fn add_equipment_item(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
+    // Actual Cost projects have no Work Packages: the item always belongs to
+    // the single implicit WP, whatever the form sent.
+    let mut input = input;
+    if project.config.is_actual_cost() {
+        input.work_package_id = 1;
+    }
+
     validate_equipment_item(
         &input,
         project.config.duration_years,
@@ -54,6 +61,13 @@ pub fn update_equipment_item(
 ) -> Result<BudgetSummaryDto, AppError> {
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
+
+    // Actual Cost projects have no Work Packages: the item always belongs to
+    // the single implicit WP, whatever the form sent.
+    let mut input = input;
+    if project.config.is_actual_cost() {
+        input.work_package_id = 1;
+    }
 
     validate_equipment_item(
         &input,

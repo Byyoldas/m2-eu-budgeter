@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { saveProjectAs } from '../ipc/commands';
-import { useProjectStore, useSummary } from '../store/projectStore';
+import { useProjectStore, useSummary, useIsActualCost } from '../store/projectStore';
 import { BudgetWpBarChart } from '../components/BudgetWpBarChart';
 import { BudgetRingChart } from '../components/BudgetRingChart';
 import { exportToExcel } from '../export/excelExporter';
@@ -27,6 +27,7 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
   const summary = useSummary();
   const projectConfig = useProjectStore((s) => s.projectConfig);
   const countries = useProjectStore((s) => s.countries);
+  const isActualCost = useIsActualCost();
   const projectPath = useProjectStore((s) => s.projectPath);
   const setProjectPath = useProjectStore((s) => s.setProjectPath);
   const setDirty = useProjectStore((s) => s.setDirty);
@@ -82,7 +83,11 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
     { label: 'E  Indirect (25%)', total: summary.category_e_total, key: null },
   ];
 
-  const wpBudgets = summary.wp_budgets;
+  // Actual Cost has no Work-Package breakdown: render category totals only.
+  // (The backend still holds one implicit WP, so the grand total below is
+  // always summed from the real WP budgets, not from this possibly-empty view.)
+  const wpBudgets = isActualCost ? [] : summary.wp_budgets;
+  const projectDirectTotal = summary.wp_budgets.reduce((sum, wp) => sum + parseFloat(wp.total_eur), 0);
 
   return (
     <div className="screen">
@@ -139,7 +144,7 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
               ))}
               <td>
                 <strong>
-                  {fmt(wpBudgets.reduce((sum, wp) => sum + parseFloat(wp.total_eur), 0).toString())}
+                  {fmt(projectDirectTotal.toString())}
                 </strong>
               </td>
             </tr>
@@ -169,14 +174,16 @@ export function ReviewExport({ onBack }: ReviewExportProps) {
 
       {/* Charts */}
       <div className="review-charts">
-        <BudgetWpBarChart />
+        {!isActualCost && <BudgetWpBarChart />}
         <BudgetRingChart />
       </div>
 
       {/* Personnel detail */}
       {summary.role_detail.length > 0 && (
         <div className="review-detail-card">
-          <h3 className="review-section-title">Personnel Detail — Cost by Work Package</h3>
+          <h3 className="review-section-title">
+            {isActualCost ? 'Personnel Detail' : 'Personnel Detail — Cost by Work Package'}
+          </h3>
           <table className="review-table">
             <thead>
               <tr>

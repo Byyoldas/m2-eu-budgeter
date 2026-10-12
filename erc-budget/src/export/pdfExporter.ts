@@ -21,7 +21,10 @@ function wpLabel(wp: WpBudgetDto): string {
 }
 
 function buildHtml(summary: BudgetSummaryDto, config: ProjectConfigInput | null): string {
-  const wpBudgets = summary.wp_budgets;
+  // Actual Cost has no Work-Package breakdown: category totals only, and no
+  // Work Package column on trips. Name lookups still use the full WP list.
+  const isActualCost = config?.funding_model === 'ActualCost';
+  const wpBudgets = isActualCost ? [] : summary.wp_budgets;
 
   const cats: { label: string; total: string; key: keyof WpBudgetDto | null }[] = [
     { label: 'A  Personnel',      total: summary.category_a_total, key: 'personnel_eur' },
@@ -124,12 +127,12 @@ function buildHtml(summary: BudgetSummaryDto, config: ProjectConfigInput | null)
   <div class="section">
     <h2>Travel Detail</h2>
     <table>
-      <thead><tr><th>Trip</th><th>Work Package(s)</th><th>×</th><th>Total</th></tr></thead>
+      <thead><tr><th>Trip</th>${isActualCost ? '' : '<th>Work Package(s)</th>'}<th>×</th><th>Total</th></tr></thead>
       <tbody>
         ${summary.trip_detail.map((t) => `
           <tr>
             <td>${t.name}</td>
-            <td>${t.work_package_ids.map((id) => wpBudgets.find((w) => w.work_package_id === id)?.work_package_name || `WP${id}`).join(', ')}</td>
+            ${isActualCost ? '' : `<td>${t.work_package_ids.map((id) => summary.wp_budgets.find((w) => w.work_package_id === id)?.work_package_name || `WP${id}`).join(', ')}</td>`}
             <td class="num">${t.number_of_instances}</td>
             <td class="num">${n(t.total_trip_cost_eur)}</td>
           </tr>

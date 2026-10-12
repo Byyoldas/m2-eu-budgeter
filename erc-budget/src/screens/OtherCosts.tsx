@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { otherCostSchema, type OtherCostFormData } from '../validators/schemas';
-import { useProjectStore } from '../store/projectStore';
+import { useProjectStore, useIsActualCost } from '../store/projectStore';
 import {
   addOtherCost, updateOtherCost, deleteOtherCost,
   removeCfsItem,
@@ -24,9 +24,11 @@ interface OtherCostsProps {
 
 type Mode = 'list' | 'add' | 'edit';
 
-const emptyDefaults: OtherCostFormData = {
-  name: '', amount_eur: '', notes: '', work_package_ids: [],
-};
+// Actual Cost has no Work Packages: a new item is pre-assigned to the one
+// implicit WP (and the selector is hidden); Lump Sum starts with none picked.
+const emptyDefaultsFor = (isActualCost: boolean): OtherCostFormData => ({
+  name: '', amount_eur: '', notes: '', work_package_ids: isActualCost ? [1] : [],
+});
 
 function fmt(v: string | undefined): string {
   if (!v) return '€ 0.00';
@@ -39,6 +41,8 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
   const projectConfig = useProjectStore((s) => s.projectConfig);
   const wpCount = projectConfig?.work_package_count ?? 1;
   const wpNames = projectConfig?.work_package_names ?? [];
+  const isActualCost = useIsActualCost();
+  const emptyDefaults = emptyDefaultsFor(isActualCost);
 
   const [mode, setMode] = useState<Mode>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -141,6 +145,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
               <label htmlFor="oc-notes" className="form-label">Notes</label>
               <textarea id="oc-notes" rows={2} className="form-input" {...register('notes')} />
             </div>
+            {!isActualCost && (
             <div className="form-field">
               <label className="form-label required">Work Package(s)</label>
               <div className="checkbox-grid">
@@ -162,6 +167,7 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
               {fieldError('work_package_ids') && <span className="form-error">{fieldError('work_package_ids')}</span>}
               <span className="form-hint">Cost is split evenly across all selected Work Packages.</span>
             </div>
+            )}
           </div>
           <div className="screen-footer">
             <button type="button" className="btn btn--ghost" onClick={() => setMode('list')}>Cancel</button>
@@ -214,9 +220,11 @@ export function OtherCosts({ onNext, onBack }: OtherCostsProps) {
             <div key={item.id} className="item-card">
               <div className="item-card-header">
                 <div className="item-card-info">
+                  {!isActualCost && (
                   <span className="item-card-tag">
                     {item.work_package_ids.map((id) => (wpNames[id - 1] as string | null) ?? `WP${id}`).join(', ') || '—'}
                   </span>
+                  )}
                   <h4 className="item-card-title">{item.name}</h4>
                   <span className="item-card-sub">{fmt(item.amount_eur)}</span>
                   {item.notes && <span className="item-card-hint">{item.notes}</span>}

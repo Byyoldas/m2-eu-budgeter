@@ -21,6 +21,13 @@ pub fn add_trip(
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
 
+    // Actual Cost projects have no Work Packages: the item always belongs to
+    // the single implicit WP, whatever the form sent.
+    let mut input = input;
+    if project.config.is_actual_cost() {
+        input.work_package_ids = vec![1];
+    }
+
     validate_trip(&input, project.config.work_package_count)?;
 
     let trip = Trip {
@@ -49,6 +56,13 @@ pub fn update_trip(
 ) -> Result<BudgetSummaryDto, AppError> {
     let mut lock = state.project.lock().unwrap();
     let project = lock.as_mut().ok_or(AppError::NoProject)?;
+
+    // Actual Cost projects have no Work Packages: the item always belongs to
+    // the single implicit WP, whatever the form sent.
+    let mut input = input;
+    if project.config.is_actual_cost() {
+        input.work_package_ids = vec![1];
+    }
 
     validate_trip(&input, project.config.work_package_count)?;
 

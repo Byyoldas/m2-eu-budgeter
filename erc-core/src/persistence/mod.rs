@@ -168,7 +168,7 @@ fn read_created_at(path: &Path) -> Result<String, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::entities::{Project, ProjectConfig};
+    use crate::domain::entities::{FundingModel, Project, ProjectConfig};
     use rust_decimal_macros::dec;
 
     fn make_project() -> Project {
@@ -187,6 +187,7 @@ mod tests {
             rate_version_id: "from_2025_05_13".to_string(),
             call_opening_date: None,
             project_start_date: None,
+            funding_model: FundingModel::LumpSum,
         };
         Project::new(config)
     }

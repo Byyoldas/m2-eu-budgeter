@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { personnelRoleSchema, type PersonnelRoleFormData } from '../validators/schemas';
-import { useProjectStore, usePersonnelRoles } from '../store/projectStore';
+import { useProjectStore, usePersonnelRoles, useIsActualCost } from '../store/projectStore';
 import { addPersonnelRole, updatePersonnelRole, deletePersonnelRole, previewRoleCost } from '../ipc/commands';
 import { useBudgetSummary, usePreview } from '../hooks/useBudgetSummary';
 import { RoleCard } from '../components/RoleCard';
@@ -44,6 +44,7 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
   const duration = projectConfig?.duration_years ?? 5;
   const durationMonths = duration * 12;
   const wpNames = projectConfig?.work_package_names ?? [];
+  const isActualCost = useIsActualCost();
 
   const [mode, setMode] = useState<Mode>('list');
   const [editingRole, setEditingRole] = useState<PersonnelRoleDetailDto | null>(null);
@@ -57,11 +58,13 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<PersonnelRoleFormData>({
     resolver: zodResolver(personnelRoleSchema),
     defaultValues: {
       role_type: 'Expert',
+      salary_currency: 'TRY',
       start_month: 1,
       end_month: durationMonths,
       inflation_rate_pct: projectConfig?.default_inflation_rate_pct ?? '10',
@@ -69,6 +72,7 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
   });
 
   const watchedValues = watch();
+  const salaryCurrency = watchedValues.salary_currency ?? 'TRY';
 
   // Live preview debounced
   useEffect(() => {
@@ -87,6 +91,7 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
           role_label: watchedValues.role_label ?? '',
           role_type: watchedValues.role_type ?? 'Expert',
           current_monthly_salary_try: watchedValues.current_monthly_salary_try,
+          salary_currency: salaryCurrency,
           fte_fraction: watchedValues.fte_fraction,
           inflation_rate_pct: watchedValues.inflation_rate_pct,
           start_month: startMonth,
@@ -101,6 +106,7 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
   const openAdd = () => {
     reset({
       role_type: 'Expert',
+      salary_currency: 'TRY',
       start_month: 1,
       end_month: durationMonths,
       inflation_rate_pct: projectConfig?.default_inflation_rate_pct ?? '10',
@@ -116,6 +122,7 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
       role_label: role.role_label,
       role_type: role.role_type,
       current_monthly_salary_try: role.current_monthly_salary_try,
+      salary_currency: role.salary_currency,
       fte_fraction: role.fte_fraction,
       inflation_rate_pct: role.inflation_rate_pct,
       start_month: role.start_month,
@@ -139,6 +146,7 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
       role_label: data.role_label,
       role_type: data.role_type,
       current_monthly_salary_try: data.current_monthly_salary_try,
+      salary_currency: data.salary_currency,
       fte_fraction: data.fte_fraction,
       inflation_rate_pct: data.inflation_rate_pct,
       start_month: data.start_month,
@@ -163,10 +171,13 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
             value: fmt(l.annual_cost_eur),
           })),
         { label: 'Total cost', value: fmt(previewResult.total_cost_eur), highlight: true },
-        ...previewResult.wp_breakdown.map((w) => ({
-          label: `→ ${(wpNames[w.work_package_id - 1] as string | null) ?? `WP${w.work_package_id}`}`,
-          value: fmt(w.amount_eur),
-        })),
+        // Actual Cost has no Work Packages — only the total matters.
+        ...(isActualCost
+          ? []
+          : previewResult.wp_breakdown.map((w) => ({
+              label: `→ ${(wpNames[w.work_package_id - 1] as string | null) ?? `WP${w.work_package_id}`}`,
+              value: fmt(w.amount_eur),
+            }))),
       ]
     : [];
 
@@ -208,16 +219,39 @@ export function Personnel({ onNext, onBack }: PersonnelProps) {
                 {fieldError('role_type') && <span className="form-error">{fieldError('role_type')}</span>}
               </div>
 
+              <div className="form-field">
+                <label className="form-label required" id="salary-currency-label">Salary Currency</label>
+                <div className="segmented-control" role="radiogroup" aria-labelledby="salary-currency-label">
+                  {(['TRY', 'EUR'] as const).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      role="radio"
+                      aria-checked={salaryCurrency === c}
+                      className={`seg-btn${salaryCurrency === c ? ' seg-btn--active' : ''}`}
+                      onClick={() => setValue('salary_currency', c, { shouldDirty: true })}
+                    >
+                      {c === 'TRY' ? 'Turkish Lira (TRY)' : 'Euro (EUR)'}
+                    </button>
+                  ))}
+                </div>
+                <span className="form-hint">
+                  {salaryCurrency === 'EUR'
+                    ? 'EUR salaries are used exactly as entered — no TRY→EUR conversion is applied to this role.'
+                    : 'TRY salaries are converted to EUR at the exchange rate from Budget Settings.'}
+                </span>
+              </div>
+
               <div className="form-row">
                 <div className="form-field">
                   <label htmlFor="current_monthly_salary_try" className="form-label required">
-                    Current Monthly Salary (TRY)
+                    Current Monthly Salary ({salaryCurrency})
                   </label>
                   <input
                     id="current_monthly_salary_try"
                     type="number"
                     step="any"
-                    placeholder="e.g. 227900"
+                    placeholder={salaryCurrency === 'EUR' ? 'e.g. 4500' : 'e.g. 227900'}
                     className={`form-input${fieldError('current_monthly_salary_try') ? ' form-input--error' : ''}`}
                     {...register('current_monthly_salary_try')}
                   />

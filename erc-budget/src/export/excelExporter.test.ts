@@ -92,6 +92,7 @@ const config: ProjectConfigInput = {
   rate_version_id: 'v_from_2025_05_13',
   call_opening_date: null,
   project_start_date: null,
+  funding_model: 'LumpSum',
 };
 
 describe('exportToExcel', () => {
@@ -136,9 +137,15 @@ describe('exportToExcel', () => {
 
     const sheet = wb.getWorksheet('Other Direct Costs');
     expect(sheet).toBeDefined();
-    expect(sheet!.getRow(1).values).toEqual([, 'Item', 'Work Package(s)', 'Amount (€)', 'CFS?', 'Notes']);
-    expect(sheet!.getRow(2).values).toEqual([, 'MAXQDA License', 'WP1', 9870, 'No', '']);
-    expect(sheet!.getRow(3).values).toEqual([, 'CFS Fee', '', 5000, 'Yes', 'Auto-added']);
+    // Columns A-E are the item itself; F-G are the Lump Sum allocation columns
+    // (count of WPs charged, then a 1/0 flag for the single WP) the Budget Summary reads.
+    const firstFive = (r: number) => (sheet!.getRow(r).values as unknown[]).slice(1, 6);
+    expect(firstFive(1)).toEqual(['Item', 'Work Package(s)', 'Amount (€)', 'CFS?', 'Notes']);
+    expect(firstFive(2)).toEqual(['MAXQDA License', 'WP1', 9870, 'No', '']);
+    expect(firstFive(3)).toEqual(['CFS Fee', '', 5000, 'Yes', 'Auto-added']);
+    expect((sheet!.getRow(1).values as unknown[]).slice(6)).toEqual(['# WPs charged', 'WP1 (1/0)']);
+    expect(sheet!.getRow(2).getCell(7).value).toBe(1);   // MAXQDA is charged to WP1
+    expect(sheet!.getRow(3).getCell(7).value).toBe(0);   // the CFS item has no WP
   });
 
   it('omits the Other Direct Costs sheet when there are no items', async () => {
@@ -173,7 +180,7 @@ describe('exportToExcel', () => {
           // → every month splits 50/50. Base monthly = 5000/50 = 100 EUR;
           // Year 1 monthly = 100*(1.10)^1 = 110. Expect WP1=WP2=12*110/2=660.
           id: '1', role_label: 'RoleA', role_type: 'Expert',
-          current_monthly_salary_try: '5000', inflation_rate_pct: '10', fte_fraction: '1.0',
+          current_monthly_salary_try: '5000', salary_currency: 'TRY', inflation_rate_pct: '10', fte_fraction: '1.0',
           start_month: 1, end_month: 12, cost_lines: [], total_cost_eur: '1320',
           wp_breakdown: [
             { work_package_id: 1, amount_eur: '660' },
@@ -186,7 +193,7 @@ describe('exportToExcel', () => {
           // inflated rate: 100*(1.10)^2=121 → 12*121=1452 (all to WP2).
           // Expect WP1=660, WP2=660+1452=2112, total=2772.
           id: '2', role_label: 'RoleB', role_type: 'Expert',
-          current_monthly_salary_try: '5000', inflation_rate_pct: '10', fte_fraction: '1.0',
+          current_monthly_salary_try: '5000', salary_currency: 'TRY', inflation_rate_pct: '10', fte_fraction: '1.0',
           start_month: 1, end_month: 24, cost_lines: [], total_cost_eur: '2772',
           wp_breakdown: [
             { work_package_id: 1, amount_eur: '660' },
@@ -226,7 +233,7 @@ describe('exportToExcel', () => {
     // Roles table starts at row 9 (header) / row 10 (first role): 2 WP rows
     // (3-4) + Total PM/Employment Months/Reconciled? rows (5-7) + blank (8).
     expect(persSheet!.getRow(9).values).toEqual([
-      , 'Role', 'Type', 'Current Salary (TRY)', 'Annual Increase (%)', 'PM',
+      , 'Role', 'Type', 'Current Salary', 'Annual Increase (%)', 'PM',
       'Start Month', 'End Month', 'Base Monthly (€)', 'Average Monthly (€)', 'WP1 (€)', 'WP2 (€)', 'Unattributed (€)', 'Total (€)',
     ]);
 
@@ -306,7 +313,7 @@ describe('exportToExcel', () => {
         {
           // RoleA: 100 EUR base, 10% inflation, active months 1-36 (whole project).
           id: '1', role_label: 'RoleA', role_type: 'Expert',
-          current_monthly_salary_try: '5000', inflation_rate_pct: '10', fte_fraction: '1.0',
+          current_monthly_salary_try: '5000', salary_currency: 'TRY', inflation_rate_pct: '10', fte_fraction: '1.0',
           start_month: 1, end_month: 36, cost_lines: [], total_cost_eur: '4369.2',
           wp_breakdown: [
             { work_package_id: 1, amount_eur: '2046.00' },
@@ -316,7 +323,7 @@ describe('exportToExcel', () => {
         {
           // RoleB: 160 EUR base, 25% inflation, active months 10-30.
           id: '2', role_label: 'RoleB', role_type: 'PostDoc',
-          current_monthly_salary_try: '8000', inflation_rate_pct: '25', fte_fraction: '1.0',
+          current_monthly_salary_try: '8000', salary_currency: 'TRY', inflation_rate_pct: '25', fte_fraction: '1.0',
           start_month: 10, end_month: 30, cost_lines: [], total_cost_eur: '5475',
           wp_breakdown: [
             { work_package_id: 1, amount_eur: '2100.0' },
@@ -412,7 +419,7 @@ describe('exportToExcel', () => {
         {
           // 24 months (months 1-24), FTE 0.4 → Person-Months = 24 x 0.4 = 9.6.
           id: '1', role_label: 'PartTimer', role_type: 'Expert',
-          current_monthly_salary_try: '5000', inflation_rate_pct: '0', fte_fraction: '0.4',
+          current_monthly_salary_try: '5000', salary_currency: 'TRY', inflation_rate_pct: '0', fte_fraction: '0.4',
           start_month: 1, end_month: 24, cost_lines: [], total_cost_eur: '480', wp_breakdown: [],
         },
       ],
@@ -475,7 +482,7 @@ describe('exportToExcel', () => {
       role_detail: [
         {
           id: '1', role_label: 'RoundingCase', role_type: 'Expert',
-          current_monthly_salary_try: '50000', inflation_rate_pct: '0', fte_fraction: '0.79',
+          current_monthly_salary_try: '50000', salary_currency: 'TRY', inflation_rate_pct: '0', fte_fraction: '0.79',
           start_month: 1, end_month: 3, cost_lines: [], total_cost_eur: '2400',
           wp_breakdown: [
             { work_package_id: 1, amount_eur: '1200' },
@@ -535,7 +542,7 @@ describe('exportToExcel', () => {
       role_detail: [
         {
           id: '1', role_label: 'Solo', role_type: 'Expert',
-          current_monthly_salary_try: '5000', inflation_rate_pct: '10', fte_fraction: '1.0',
+          current_monthly_salary_try: '5000', salary_currency: 'TRY', inflation_rate_pct: '10', fte_fraction: '1.0',
           start_month: 1, end_month: 24, cost_lines: [], total_cost_eur: '2772',
           wp_breakdown: [{ work_package_id: 1, amount_eur: '2772' }],
         },
@@ -554,7 +561,7 @@ describe('exportToExcel', () => {
     // 1 WP -> WP Timelines table occupies row 3 only, so the roles table
     // header is row 8 and the role itself is row 9.
     expect(persSheet!.getRow(8).values).toEqual([
-      , 'Role', 'Type', 'Current Salary (TRY)', 'Annual Increase (%)', 'PM',
+      , 'Role', 'Type', 'Current Salary', 'Annual Increase (%)', 'PM',
       'Start Month', 'End Month', 'Base Monthly (€)', 'Average Monthly (€)', 'WP1 (€)', 'Unattributed (€)', 'Total (€)',
     ]);
 
@@ -587,9 +594,10 @@ describe('exportToExcel', () => {
     await wb.xlsx.load(capturedBuffer as ArrayBuffer);
     const subSheet = wb.getWorksheet('Subcontracting');
     expect(subSheet).toBeDefined();
-    expect(subSheet!.getRow(1).values).toEqual([, 'Item', 'Work Package(s)', 'Amount (€)', 'Notes']);
-    expect(subSheet!.getRow(2).values).toEqual([, 'Fieldwork subcontract', 'WP1', 20000, 'Partner org']);
-    expect(subSheet!.getRow(3).values).toEqual([, 'Data annotation service', 'WP1', 12000, '']);
+    const firstFour = (r: number) => (subSheet!.getRow(r).values as unknown[]).slice(1, 5);
+    expect(firstFour(1)).toEqual(['Item', 'Work Package(s)', 'Amount (€)', 'Notes']);
+    expect(firstFour(2)).toEqual(['Fieldwork subcontract', 'WP1', 20000, 'Partner org']);
+    expect(firstFour(3)).toEqual(['Data annotation service', 'WP1', 12000, '']);
 
     const summarySheet = wb.getWorksheet('Budget Summary');
     const hf = HyperFormula.buildFromSheets({
@@ -602,5 +610,353 @@ describe('exportToExcel', () => {
     // Total (€) is the 3rd column (Category, WP1, Total) — hf.getCellValue's
     // col is 0-indexed, so that's col 2.
     expect(hf.getCellValue({ sheet: bsSheetId, row: bRowNum - 1, col: 2 })).toBeCloseTo(32000, 6);
+  });
+  it('a EUR salary is used as entered (no TRY→EUR division) and each salary cell shows its own currency', async () => {
+    // Same €100/month three ways: 5,000 TRY at 50 TRY/EUR (converted) and
+    // 100 EUR (used as is). Both Base Monthly cells must come out at 100.
+    const summary = makeSummary({
+      role_detail: [
+        {
+          id: '1', role_label: 'TryRole', role_type: 'Expert',
+          current_monthly_salary_try: '5000', salary_currency: 'TRY', inflation_rate_pct: '0', fte_fraction: '1.0',
+          start_month: 1, end_month: 12, cost_lines: [], total_cost_eur: '1200', wp_breakdown: [],
+        },
+        {
+          id: '2', role_label: 'EurRole', role_type: 'Expert',
+          current_monthly_salary_try: '100', salary_currency: 'EUR', inflation_rate_pct: '0', fte_fraction: '1.0',
+          start_month: 1, end_month: 12, cost_lines: [], total_cost_eur: '1200', wp_breakdown: [],
+        },
+      ],
+    });
+
+    await exportToExcel(summary, config);
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(capturedBuffer as ArrayBuffer);
+    const persSheet = wb.getWorksheet('Personnel')!;
+
+    // 1 WP -> roles header row 8, roles at rows 9 and 10.
+    expect(persSheet.getRow(8).getCell(3).value).toBe('Current Salary');
+    expect(persSheet.getRow(9).getCell(3).numFmt).toContain('TRY');
+    expect(persSheet.getRow(10).getCell(3).numFmt).toContain('EUR');
+    expect((persSheet.getRow(9).getCell(8).value as { formula: string }).formula).toContain("/'Budget Summary'");
+    expect((persSheet.getRow(10).getCell(8).value as { formula: string }).formula).toBe('C10');
+
+    const hf = HyperFormula.buildFromSheets({
+      'Budget Summary': gridFromWorksheet(wb.getWorksheet('Budget Summary')!),
+      'Personnel': gridFromWorksheet(persSheet),
+      '_WPMonthHelper': gridFromWorksheet(wb.getWorksheet('_WPMonthHelper')!),
+      '_WPYearHelper': gridFromWorksheet(wb.getWorksheet('_WPYearHelper')!),
+    }, { licenseKey: 'gpl-v3', useArrayArithmetic: true });
+    const sheetId = hf.getSheetId('Personnel')!;
+    const cell = (row: number, col: number) => hf.getCellValue({ sheet: sheetId, row: row - 1, col: col - 1 });
+    expect(cell(9, 8)).toBeCloseTo(100, 6);
+    expect(cell(10, 8)).toBeCloseTo(100, 6);
+    // Same salary through the inflation/PM chain -> same Total (12 x 100).
+    expect(cell(9, 12)).toBeCloseTo(1200, 6);
+    expect(cell(10, 12)).toBeCloseTo(1200, 6);
+  });
+
+  describe('Unattributed (€) reconciles to zero when Work Packages overlap', () => {
+    // Regression for a real export (asdaf_Budget): WP2 (months 13-24) and WP3
+    // (months 18-60) overlap for months 18-24. The year-2 "covered PM" was
+    // summed from the 1/overlap-count row, so each overlapped month counted as
+    // 0.5 instead of 1: 4.25 instead of 6.0. That shrank the year's priced
+    // pool (ROUND(4.25) = 4.3 -> 43,000 instead of 60,000) and, because the
+    // per-WP shares are divided by the same wrong figure, the WP columns then
+    // summed to MORE than the role's Total — a -705.88 "Unattributed".
+    const rows = (summary: BudgetSummaryDto) => summary.wp_budgets;
+    const wp = (id: number) => ({ work_package_id: id, work_package_name: null, personnel_eur: '0', equipment_eur: '0', travel_eur: '0', other_costs_eur: '0', subcontracting_eur: '0', total_eur: '0' });
+
+    const evaluate = async (cfg: ProjectConfigInput, summary: BudgetSummaryDto) => {
+      await exportToExcel(summary, cfg);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(capturedBuffer as ArrayBuffer);
+      const hf = HyperFormula.buildFromSheets({
+        'Budget Summary': gridFromWorksheet(wb.getWorksheet('Budget Summary')!),
+        'Personnel': gridFromWorksheet(wb.getWorksheet('Personnel')!),
+        '_WPMonthHelper': gridFromWorksheet(wb.getWorksheet('_WPMonthHelper')!),
+        '_WPYearHelper': gridFromWorksheet(wb.getWorksheet('_WPYearHelper')!),
+      }, { licenseKey: 'gpl-v3', useArrayArithmetic: true });
+      const id = hf.getSheetId('Personnel')!;
+      return (row: number, col: number) => hf.getCellValue({ sheet: id, row: row - 1, col: col - 1 }) as number;
+    };
+
+    const role = (fte: string, salary: string, start: number, end: number) => ({
+      id: '1', role_label: 'R', role_type: 'Expert' as const,
+      current_monthly_salary_try: salary, salary_currency: 'EUR' as const, inflation_rate_pct: '0', fte_fraction: fte,
+      start_month: start, end_month: end, cost_lines: [], total_cost_eur: '0', wp_breakdown: [],
+    });
+
+    it('the exact asdaf scenario: WP1 1-12, WP2 13-24, WP3 18-60, role 1-60 at 0.5 FTE, EUR 10,000', async () => {
+      const cfg: ProjectConfigInput = {
+        ...config, duration_years: 5, work_package_count: 3, work_package_names: [null, null, null],
+        work_package_start_months: [1, 13, 18], work_package_end_months: [12, 24, 60],
+      };
+      const summary = makeSummary({ wp_budgets: [wp(1), wp(2), wp(3)], role_detail: [role('0.5', '10000', 1, 60)] });
+      const cell = await evaluate(cfg, summary);
+      expect(rows(summary)).toHaveLength(3);
+
+      // 3 WPs -> timelines rows 3-5, audit rows 6-8, blank 9, header 10, role row 11.
+      // Columns: J/K/L = WP1..3, M = Unattributed, N = Total.
+      expect(cell(11, 14)).toBeCloseTo(300000, 4);  // 5 years x 6.0 PM x 10,000
+      expect(cell(11, 10)).toBeCloseTo(60000, 4);   // year 1: WP1 only
+      expect(cell(11, 11)).toBeCloseTo(42500, 4);   // year 2: 4.25 of 6.0 PM
+      expect(cell(11, 12)).toBeCloseTo(197500, 4);  // year 2: 1.75 of 6.0 + years 3-5 in full
+      expect(cell(11, 13)).toBeCloseTo(0, 6);       // Unattributed
+    });
+
+    it('stays at zero when overlap and PM rounding combine (FTE 0.79 -> 9.48 PM rounds to 9.5)', async () => {
+      const cfg: ProjectConfigInput = {
+        ...config, duration_years: 1, work_package_count: 2, work_package_names: [null, null],
+        work_package_start_months: [1, 1], work_package_end_months: [12, 3],
+      };
+      const summary = makeSummary({ wp_budgets: [wp(1), wp(2)], role_detail: [role('0.79', '1000', 1, 12)] });
+      const cell = await evaluate(cfg, summary);
+
+      // 2 WPs -> header row 9, role row 10. J/K = WP1/WP2, L = Unattributed, M = Total.
+      expect(cell(10, 13)).toBeCloseTo(9500, 4);                      // 9.5 rounded PM x 1,000
+      expect(cell(10, 10) + cell(10, 11)).toBeCloseTo(9500, 4);       // WP split sums to the Total
+      expect(cell(10, 12)).toBeCloseTo(0, 6);
+    });
+  });
+
+  describe('Budget Summary per-WP cells are live formulas (Lump Sum)', () => {
+    const wp = (id: number) => ({ work_package_id: id, work_package_name: null, personnel_eur: '999', equipment_eur: '999', travel_eur: '999', other_costs_eur: '999', subcontracting_eur: '999', total_eur: '0' });
+    // Deliberately wrong static figures (999) in wp_budgets: if any Budget
+    // Summary WP cell still read them, the assertions below would fail.
+    const cfg: ProjectConfigInput = {
+      ...config, duration_years: 1, work_package_count: 3, work_package_names: [null, null, null],
+      work_package_start_months: [1, 1, 1], work_package_end_months: [12, 12, 12],
+    };
+    const summary = () => makeSummary({
+      wp_budgets: [wp(1), wp(2), wp(3)],
+      role_detail: [{
+        id: '1', role_label: 'R', role_type: 'Expert', current_monthly_salary_try: '1000', salary_currency: 'EUR',
+        inflation_rate_pct: '0', fte_fraction: '1.0', start_month: 1, end_month: 12,
+        cost_lines: [], total_cost_eur: '12000', wp_breakdown: [],
+      }],
+      equipment_detail: [
+        { id: 'e1', name: 'Laptop', purchase_cost_eur: '2000', useful_lifetime_months: 36, grant_usage_pct: '100', grant_usage_months: 12, work_package_id: 2, theoretical_eligible_eur: '700', maximum_eligible_eur: '2000', is_capped: false, eligible_depreciation_eur: '700' },
+        { id: 'e2', name: 'Server', purchase_cost_eur: '5000', useful_lifetime_months: 60, grant_usage_pct: '100', grant_usage_months: 12, work_package_id: 3, theoretical_eligible_eur: '1000', maximum_eligible_eur: '5000', is_capped: false, eligible_depreciation_eur: '1000' },
+      ],
+      trip_detail: [
+        { id: 't1', name: 'Conf', work_package_ids: [1, 2], number_of_instances: 1, destination_country_code: null, one_way_distance_km: null, number_of_nights: null, number_of_days: null, flight_cost_per_instance: null, accommodation_cost_per_instance: null, subsistence_cost_per_instance: null, domestic_transport_per_instance: null, per_instance_total_eur: '3000', total_trip_cost_eur: '3000' },
+      ],
+      other_cost_detail: [
+        { id: 'o1', name: 'Fees', amount_eur: '900', is_cfs_item: false, notes: null, work_package_ids: [1, 2, 3] },
+        { id: 'o2', name: 'CFS', amount_eur: '500', is_cfs_item: true, notes: null, work_package_ids: [] },
+      ],
+      subcontracting_detail: [
+        { id: 's1', name: 'Field', amount_eur: '600', notes: null, work_package_ids: [3] },
+        { id: 's2', name: 'Data', amount_eur: '400', notes: null, work_package_ids: [1, 3] },
+      ],
+    });
+
+    const build = async () => {
+      await exportToExcel(summary(), cfg);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(capturedBuffer as ArrayBuffer);
+      const names = ['Budget Summary', 'Personnel', '_WPMonthHelper', '_WPYearHelper', 'Equipment', 'Travel', 'Other Direct Costs', 'Subcontracting'];
+      const hf = HyperFormula.buildFromSheets(
+        Object.fromEntries(names.map((n) => [n, gridFromWorksheet(wb.getWorksheet(n)!)])),
+        { licenseKey: 'gpl-v3', useArrayArithmetic: true },
+      );
+      const bsId = hf.getSheetId('Budget Summary')!;
+      const bs = wb.getWorksheet('Budget Summary')!;
+      const rowOf = (label: string) => bs.getRows(1, bs.rowCount)!.find((r) => r.getCell(1).value === label)!.number;
+      // Budget Summary columns (0-indexed): 0 label, 1-3 = WP1-3, 4 = Total.
+      const wpCells = (label: string) => [1, 2, 3].map((c) => hf.getCellValue({ sheet: bsId, row: rowOf(label) - 1, col: c }) as number);
+      return { wb, hf, wpCells };
+    };
+
+    it('every category\'s WP cells are computed from the detail sheets, not the backend\'s static figures', async () => {
+      const { wpCells } = await build();
+      // Personnel: 1,000 x 12 months, split evenly by 3 fully-overlapping WPs.
+      wpCells('A  Personnel').forEach((v) => expect(v).toBeCloseTo(4000, 4));
+      // Equipment: each item goes to its single WP.
+      expect(wpCells('C2 Equipment')).toEqual([0, 700, 1000]);
+      // Travel: 3,000 split across WP1+WP2.
+      expect(wpCells('C1 Travel')).toEqual([1500, 1500, 0]);
+      // Other: 900 over all 3 WPs; the CFS item (no WP) lands in none.
+      expect(wpCells('C3 Other Direct')).toEqual([300, 300, 300]);
+      // Subcontracting: 600 -> WP3; 400 split WP1+WP3.
+      expect(wpCells('B  Subcontracting')).toEqual([200, 0, 800]);
+    });
+
+    it('editing a detail sheet flows into the matching Budget Summary WP cell', async () => {
+      const { hf, wpCells } = await build();
+
+      // Other Direct Costs: raise the 900 item to 1,500 (cell C2) -> 500 per WP.
+      hf.setCellContents({ sheet: hf.getSheetId('Other Direct Costs')!, row: 1, col: 2 }, [[1500]]);
+      expect(wpCells('C3 Other Direct')).toEqual([500, 500, 500]);
+
+      // Same item: un-charge WP3 by flipping its flag (G2..: count F, flags G/H/I) -> 750 each to WP1/WP2.
+      hf.setCellContents({ sheet: hf.getSheetId('Other Direct Costs')!, row: 1, col: 8 }, [[0]]);
+      expect(wpCells('C3 Other Direct')).toEqual([750, 750, 0]);
+
+      // Equipment: move the Laptop from WP2 to WP1 (Work Package column H).
+      hf.setCellContents({ sheet: hf.getSheetId('Equipment')!, row: 1, col: 7 }, [[1]]);
+      expect(wpCells('C2 Equipment')).toEqual([700, 0, 1000]);
+
+      // Personnel: double the salary on the Personnel sheet (role row 11, column C -> 2,000): the WP cells follow.
+      hf.setCellContents({ sheet: hf.getSheetId('Personnel')!, row: 10, col: 2 }, [[2000]]);
+      wpCells('A  Personnel').forEach((v) => expect(v).toBeCloseTo(8000, 4));
+    });
+  });
+
+  describe('Actual Cost funding model', () => {
+    const actualConfig: ProjectConfigInput = {
+      ...config,
+      duration_years: 2,
+      funding_model: 'ActualCost',
+      // Collapsed by the backend to one implicit WP; the exporter must not show it.
+      work_package_start_months: [1],
+      work_package_end_months: [24],
+    };
+
+    const actualSummary = () => makeSummary({
+      category_a_total: '27720',
+      role_detail: [
+        {
+          // EUR salary at face value (the TRY rate of 50 must not touch it):
+          // Y1 = 1000*1.1 = 1100, Y2 = 1210 -> 12*1100 + 12*1210 = 27,720.
+          id: '1', role_label: 'Solo', role_type: 'Expert',
+          current_monthly_salary_try: '1000', salary_currency: 'EUR', inflation_rate_pct: '10', fte_fraction: '1.0',
+          start_month: 1, end_month: 24, cost_lines: [], total_cost_eur: '27720',
+          wp_breakdown: [{ work_package_id: 1, amount_eur: '27720' }],
+        },
+      ],
+      trip_detail: [
+        {
+          id: 't1', name: 'Conference', work_package_ids: [1], number_of_instances: 2,
+          destination_country_code: null, one_way_distance_km: null, number_of_nights: null, number_of_days: null,
+          flight_cost_per_instance: null, accommodation_cost_per_instance: null,
+          subsistence_cost_per_instance: null, domestic_transport_per_instance: null,
+          per_instance_total_eur: '1500', total_trip_cost_eur: '3000',
+        },
+      ],
+      other_cost_detail: [
+        { id: 'o1', name: 'Fees', amount_eur: '700', is_cfs_item: false, notes: null, work_package_ids: [1] },
+      ],
+      subcontracting_detail: [
+        { id: 's1', name: 'Fieldwork', amount_eur: '900', notes: null, work_package_ids: [1] },
+      ],
+    });
+
+    it('omits every Work-Package sheet, column and helper', async () => {
+      await exportToExcel(actualSummary(), actualConfig);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(capturedBuffer as ArrayBuffer);
+
+      expect(wb.getWorksheet('_WPMonthHelper')).toBeUndefined();
+      expect(wb.getWorksheet('Gantt Chart')).toBeUndefined();
+
+      // Budget Summary: Category | Total only.
+      const bs = wb.getWorksheet('Budget Summary')!;
+      const header = bs.getRows(1, bs.rowCount)!.find((r) => r.getCell(1).value === 'Category')!;
+      expect(header.getCell(2).value).toBe('Total (€)');
+      expect(header.getCell(3).value).toBeNull();
+
+      // Personnel: no timelines table (roles header is row 1), no WP or
+      // Unattributed columns.
+      const pers = wb.getWorksheet('Personnel')!;
+      expect(pers.getRow(1).values).toEqual([
+        , 'Role', 'Type', 'Current Salary', 'Annual Increase (%)', 'PM',
+        'Start Month', 'End Month', 'Base Monthly (€)', 'Average Monthly (€)', 'Total PM', 'Total (€)',
+      ]);
+      const personnelTexts: unknown[] = [];
+      pers.eachRow((row) => row.eachCell((c) => personnelTexts.push(c.value)));
+      expect(personnelTexts).not.toContain('Work Package Timelines');
+
+      // _WPYearHelper keeps only the role-level columns A-F.
+      expect(wb.getWorksheet('_WPYearHelper')!.getRow(1).values).toEqual([
+        , 'Role', 'Year', 'Active Months', 'PM (rounded)', 'Salary (€)', 'Annual Cost — CALC-03',
+      ]);
+
+      // Detail sheets lose their Work Package(s) column.
+      expect(wb.getWorksheet('Travel')!.getRow(1).getCell(2).value).toBe('Instances');
+      expect(wb.getWorksheet('Other Direct Costs')!.getRow(1).values).toEqual([, 'Item', 'Amount (€)', 'CFS?', 'Notes']);
+      expect(wb.getWorksheet('Subcontracting')!.getRow(1).values).toEqual([, 'Item', 'Amount (€)', 'Notes']);
+    });
+
+    it('still computes correct totals — EUR salary untouched by the TRY rate, summary summing the shifted detail columns', async () => {
+      await exportToExcel(actualSummary(), actualConfig);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(capturedBuffer as ArrayBuffer);
+
+      const hf = HyperFormula.buildFromSheets({
+        'Budget Summary': gridFromWorksheet(wb.getWorksheet('Budget Summary')!),
+        'Personnel': gridFromWorksheet(wb.getWorksheet('Personnel')!),
+        '_WPYearHelper': gridFromWorksheet(wb.getWorksheet('_WPYearHelper')!),
+        'Travel': gridFromWorksheet(wb.getWorksheet('Travel')!),
+        'Other Direct Costs': gridFromWorksheet(wb.getWorksheet('Other Direct Costs')!),
+        'Subcontracting': gridFromWorksheet(wb.getWorksheet('Subcontracting')!),
+      }, { licenseKey: 'gpl-v3', useArrayArithmetic: true });
+
+      const persId = hf.getSheetId('Personnel')!;
+      const pc = (row: number, col: number) => hf.getCellValue({ sheet: persId, row: row - 1, col: col - 1 });
+      expect(pc(2, 8)).toBeCloseTo(1000, 6);   // Base Monthly: EUR as entered
+      expect(pc(2, 9)).toBeCloseTo(1155, 6);   // Average Monthly: (1100 + 1210) / 2
+      expect(pc(2, 10)).toBeCloseTo(24, 6);    // Total PM: 12 + 12
+      expect(pc(2, 11)).toBeCloseTo(27720, 6); // Total
+
+      const bsId = hf.getSheetId('Budget Summary')!;
+      const bs = wb.getWorksheet('Budget Summary')!;
+      const totalOf = (label: string) => {
+        const r = bs.getRows(1, bs.rowCount)!.find((row) => row.getCell(1).value === label)!;
+        return hf.getCellValue({ sheet: bsId, row: r.number - 1, col: 1 }); // 0-indexed col 1 = "Total (€)"
+      };
+      expect(totalOf('A  Personnel')).toBeCloseTo(27720, 6);
+      expect(totalOf('B  Subcontracting')).toBeCloseTo(900, 6);
+      expect(totalOf('C1 Travel')).toBeCloseTo(3000, 6);
+      expect(totalOf('C3 Other Direct')).toBeCloseTo(700, 6);
+    });
+
+    it('shows Total PM per role (summed from the per-year ROUNDED PM) and a project total row', async () => {
+      // 2-year project. All EUR, 0% inflation, so only the PM matters:
+      //  - Full:  months 1-24, FTE 1.0  -> 12.0 + 12.0           = 24.0
+      //  - Part:  months 1-3,  FTE 0.79 -> 2.37 rounds to 2.4    =  2.4
+      //  - Split: months 11-14, FTE 0.5 -> Y1 2 months = 1.0, Y2 2 months = 1.0 = 2.0
+      // Project total = 28.4. (Rounding happens per role-year, like the cost.)
+      const role = (id: string, label: string, fte: string, start: number, end: number) => ({
+        id, role_label: label, role_type: 'Expert' as const,
+        current_monthly_salary_try: '1000', salary_currency: 'EUR' as const, inflation_rate_pct: '0', fte_fraction: fte,
+        start_month: start, end_month: end, cost_lines: [], total_cost_eur: '0', wp_breakdown: [],
+      });
+      const summary = makeSummary({
+        role_detail: [role('1', 'Full', '1.0', 1, 24), role('2', 'Part', '0.79', 1, 3), role('3', 'Split', '0.5', 11, 14)],
+      });
+
+      await exportToExcel(summary, actualConfig);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(capturedBuffer as ArrayBuffer);
+      const pers = wb.getWorksheet('Personnel')!;
+
+      // The totals row sits directly under the three roles (rows 2-4).
+      expect(pers.getRow(5).getCell(1).value).toBe('Total');
+      expect(pers.getRow(2).getCell(10).numFmt).toBe('0.0');
+
+      const hf = HyperFormula.buildFromSheets({
+        'Budget Summary': gridFromWorksheet(wb.getWorksheet('Budget Summary')!),
+        'Personnel': gridFromWorksheet(pers),
+        '_WPYearHelper': gridFromWorksheet(wb.getWorksheet('_WPYearHelper')!),
+      }, { licenseKey: 'gpl-v3', useArrayArithmetic: true });
+      const id = hf.getSheetId('Personnel')!;
+      const pc = (row: number, col: number) => hf.getCellValue({ sheet: id, row: row - 1, col: col - 1 });
+
+      expect(pc(2, 10)).toBeCloseTo(24, 6);
+      expect(pc(3, 10)).toBeCloseTo(2.4, 6);
+      expect(pc(4, 10)).toBeCloseTo(2.0, 6);
+      expect(pc(5, 10)).toBeCloseTo(28.4, 6);                 // project Total PM
+      // Cost totals row = sum of the roles' Totals (24x1000 + 2.4x1000 + 2.0x1000).
+      expect(pc(5, 11)).toBeCloseTo(28400, 6);
+
+      // The Budget Summary's Personnel line sums the three roles only — the
+      // totals row below them is not double counted.
+      const bs = wb.getWorksheet('Budget Summary')!;
+      const a = bs.getRows(1, bs.rowCount)!.find((r) => r.getCell(1).value === 'A  Personnel')!;
+      expect((a.getCell(2).value as { formula: string }).formula).toBe('SUM(Personnel!K2:K4)');
+    });
   });
 });

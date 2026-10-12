@@ -9,7 +9,7 @@
 //!
 //! All monetary Decimal values are serialised as strings for JSON safety.
 
-use crate::domain::entities::{RoleType, TripType};
+use crate::domain::entities::{FundingModel, RoleType, SalaryCurrency, TripType};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -40,6 +40,9 @@ pub struct ProjectConfigDto {
     pub call_opening_date: Option<String>,
     #[serde(default)]
     pub project_start_date: Option<String>,
+    /// Actual Cost vs Lump Sum. `#[serde(default)]` -> `LumpSum`.
+    #[serde(default)]
+    pub funding_model: FundingModel,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +53,10 @@ pub struct PersonnelRoleInputDto {
     #[serde(with = "rust_decimal::serde::str")]
     #[cfg_attr(feature = "ts-rs", ts(type = "string"))]
     pub current_monthly_salary_try: Decimal,
+    /// Currency the salary above was entered in (`"TRY"` / `"EUR"`).
+    /// `#[serde(default)]` -> `TRY`.
+    #[serde(default)]
+    pub salary_currency: SalaryCurrency,
     #[serde(with = "rust_decimal::serde::str")]
     #[cfg_attr(feature = "ts-rs", ts(type = "string"))]
     pub fte_fraction: Decimal,
@@ -150,11 +157,14 @@ pub struct PersonnelRoleDetailDto {
     pub id: Uuid,
     pub role_label: String,
     pub role_type: RoleType,
-    /// Current monthly gross salary in TRY (raw input, exposed for exports that
-    /// need to rebuild the salary-projection formula rather than a static total).
+    /// Current monthly gross salary, in `salary_currency` (raw input, exposed
+    /// for exports that need to rebuild the salary-projection formula rather
+    /// than a static total). Keeps its `_try` name for file compatibility.
     #[serde(with = "rust_decimal::serde::str")]
     #[cfg_attr(feature = "ts-rs", ts(type = "string"))]
     pub current_monthly_salary_try: Decimal,
+    /// Currency `current_monthly_salary_try` is expressed in.
+    pub salary_currency: SalaryCurrency,
     /// Per-role annual salary inflation rate (%), raw input (see above).
     #[serde(with = "rust_decimal::serde::str")]
     #[cfg_attr(feature = "ts-rs", ts(type = "string"))]

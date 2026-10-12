@@ -23,6 +23,7 @@ export function TripCard({ trip, onEdit, onDuplicate, onDelete }: TripCardProps)
   const [expanded, setExpanded] = useState(false);
   const isItemized = trip.flight_cost_per_instance !== null;
   const wpNames = useProjectStore((s) => s.projectConfig?.work_package_names ?? []);
+  const isActualCost = useProjectStore((s) => s.projectConfig?.funding_model === 'ActualCost');
   const wpLabel = trip.work_package_ids
     .map((id) => (wpNames[id - 1] as string | null) ?? `WP${id}`)
     .join(', ');
@@ -31,7 +32,7 @@ export function TripCard({ trip, onEdit, onDuplicate, onDelete }: TripCardProps)
     <div className="item-card">
       <div className="item-card-header">
         <div className="item-card-info">
-          <span className="item-card-tag">{wpLabel || '—'} · ×{trip.number_of_instances}</span>
+          <span className="item-card-tag">{isActualCost ? '' : `${wpLabel || '—'} · `}×{trip.number_of_instances}</span>
           <h4 className="item-card-title">{trip.name}</h4>
           <span className="item-card-sub">
             {fmt(trip.per_instance_total_eur)}/instance · Total: <strong>{fmt(trip.total_trip_cost_eur)}</strong>

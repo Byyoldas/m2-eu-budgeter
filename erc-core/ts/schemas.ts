@@ -41,6 +41,7 @@ export const projectSetupSchema = z.object({
     .min(1, 'At least 1 Work Package required.')
     .max(20, 'Maximum 20 Work Packages.'),
   call_opening_date: z.string().nullable().optional(),
+  funding_model: z.enum(['ActualCost', 'LumpSum'] as const),
 });
 
 export type ProjectSetupFormData = z.infer<typeof projectSetupSchema>;
@@ -75,7 +76,9 @@ export type BudgetSettingsFormData = z.infer<typeof budgetSettingsSchema>;
 export const personnelRoleSchema = z.object({
   role_label: z.string().min(1, 'Role label is required.'),
   role_type: z.enum(['Pi', 'Expert', 'PostDoc', 'PhdStudent', 'MscStudent', 'Admin'] as const),
-  current_monthly_salary_try: decimalStr('Monthly salary (TRY)'),
+  // Holds the amount in `salary_currency` (name kept for file compatibility).
+  current_monthly_salary_try: decimalStr('Monthly salary'),
+  salary_currency: z.enum(['TRY', 'EUR'] as const),
   fte_fraction: z
     .string()
     .refine((v) => {

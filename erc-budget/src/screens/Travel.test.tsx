@@ -40,6 +40,7 @@ const config: ProjectConfigInput = {
   rate_version_id: 'v_from_2025_05_13',
   call_opening_date: null,
   project_start_date: null,
+  funding_model: 'LumpSum',
 };
 
 describe('Travel — cost preview rate display', () => {

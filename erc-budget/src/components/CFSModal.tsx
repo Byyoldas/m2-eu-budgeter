@@ -21,6 +21,7 @@ export function CFSModal({ open, onClose }: CFSModalProps) {
   const projectConfig = useProjectStore((s) => s.projectConfig);
   const wpCount = projectConfig?.work_package_count ?? 1;
   const wpNames = projectConfig?.work_package_names ?? [];
+  const isActualCost = projectConfig?.funding_model === 'ActualCost';
   const { mutate, isLoading } = useBudgetSummary();
 
   const [amount, setAmount] = useState('');
@@ -37,7 +38,7 @@ export function CFSModal({ open, onClose }: CFSModalProps) {
     } else {
       setAmountError('');
     }
-    if (workPackageIds.length === 0) {
+    if (!isActualCost && workPackageIds.length === 0) {
       setWpError('Select at least one Work Package.');
       hasError = true;
     } else {
@@ -45,7 +46,7 @@ export function CFSModal({ open, onClose }: CFSModalProps) {
     }
     if (hasError) return;
 
-    const result = await mutate(() => addCfsItem(amount, workPackageIds));
+    const result = await mutate(() => addCfsItem(amount, isActualCost ? [1] : workPackageIds));
     if (result) onClose();
   };
 
@@ -92,6 +93,7 @@ export function CFSModal({ open, onClose }: CFSModalProps) {
             </div>
           </div>
 
+          {!isActualCost && (
           <div className="form-field">
             <label className="form-label required">Work Package(s)</label>
             <div className="checkbox-grid">
@@ -114,6 +116,7 @@ export function CFSModal({ open, onClose }: CFSModalProps) {
             {wpError && <span className="form-error">{wpError}</span>}
             <span className="form-hint">Cost is split evenly across all selected Work Packages.</span>
           </div>
+          )}
         </div>
 
         <div className="modal-footer">

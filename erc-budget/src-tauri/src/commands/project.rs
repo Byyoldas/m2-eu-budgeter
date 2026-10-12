@@ -74,8 +74,11 @@ pub fn create_project(
         rate_version_id: config.rate_version_id,
         call_opening_date: config.call_opening_date,
         project_start_date: config.project_start_date,
+        funding_model: config.funding_model,
     };
 
+    // Project::new collapses an Actual Cost project's Work Packages to the
+    // single implicit WP, whatever the frontend sent for them.
     let project = Project::new(project_config);
     let summary = calculate_budget_summary(&project, &state.rate_data)?;
 
@@ -130,6 +133,10 @@ pub fn update_project_config(
     project.config.indirect_cost_rate_pct = config.indirect_cost_rate_pct;
     project.config.rate_version_id = config.rate_version_id;
     project.config.call_opening_date = config.call_opening_date;
+    project.config.funding_model = config.funding_model;
+    // Switching to Actual Cost collapses the WP set and re-points every
+    // existing cost item at the single implicit WP; a no-op for Lump Sum.
+    project.enforce_funding_model();
 
     let summary = calculate_budget_summary(project, &state.rate_data)?;
     Ok(summary)
@@ -225,6 +232,7 @@ fn project_config_to_dto(config: &ProjectConfig) -> ProjectConfigDto {
         rate_version_id: config.rate_version_id.clone(),
         call_opening_date: config.call_opening_date.clone(),
         project_start_date: config.project_start_date.clone(),
+        funding_model: config.funding_model,
     }
 }
 
@@ -336,6 +344,7 @@ mod default_path_tests {
             rate_version_id: "from_2025_05_13".to_string(),
             call_opening_date: Some("2026-01-15".to_string()),
             project_start_date: Some("2026-07-01".to_string()),
+            funding_model: crate::domain::entities::FundingModel::ActualCost,
         };
 
         let dto = project_config_to_dto(&config);
@@ -360,5 +369,6 @@ mod default_path_tests {
         assert_eq!(dto.rate_version_id, config.rate_version_id);
         assert_eq!(dto.call_opening_date, config.call_opening_date);
         assert_eq!(dto.project_start_date, config.project_start_date);
+        assert_eq!(dto.funding_model, config.funding_model);
     }
 }

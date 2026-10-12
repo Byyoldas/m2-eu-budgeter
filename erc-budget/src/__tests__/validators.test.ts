@@ -28,10 +28,22 @@ describe('projectSetupSchema', () => {
     call_reference: 'ERC-2025-CoG',
     duration_years: 5,
     work_package_count: 3,
+    funding_model: 'LumpSum' as const,
   };
 
   it('accepts a valid 5-year project', () => {
     expect(projectSetupSchema.safeParse(validData).success).toBe(true);
+  });
+
+  it('accepts both funding models', () => {
+    expect(projectSetupSchema.safeParse({ ...validData, funding_model: 'LumpSum' }).success).toBe(true);
+    expect(projectSetupSchema.safeParse({ ...validData, funding_model: 'ActualCost' }).success).toBe(true);
+  });
+
+  it('rejects a missing or unknown funding model', () => {
+    const { funding_model: _omit, ...withoutModel } = validData;
+    expect(projectSetupSchema.safeParse(withoutModel).success).toBe(false);
+    expect(projectSetupSchema.safeParse({ ...validData, funding_model: 'Hybrid' }).success).toBe(false);
   });
 
   it('rejects empty project title', () => {
@@ -162,6 +174,7 @@ describe('personnelRoleSchema', () => {
     role_label: 'PI',
     role_type: 'Pi' as const,
     current_monthly_salary_try: '227900',
+    salary_currency: 'TRY',
     fte_fraction: '0.70',
     inflation_rate_pct: '20',
     start_month: 1,
@@ -185,6 +198,16 @@ describe('personnelRoleSchema', () => {
   it('rejects invalid role_type', () => {
     const r = personnelRoleSchema.safeParse({ ...validData, role_type: 'INVALID' });
     expect(r.success).toBe(false);
+  });
+
+  it('accepts a EUR salary', () => {
+    expect(personnelRoleSchema.safeParse({ ...validData, salary_currency: 'EUR', current_monthly_salary_try: '4500' }).success).toBe(true);
+  });
+
+  it('rejects a missing or unknown salary currency', () => {
+    const { salary_currency: _omit, ...withoutCurrency } = validData;
+    expect(personnelRoleSchema.safeParse(withoutCurrency).success).toBe(false);
+    expect(personnelRoleSchema.safeParse({ ...validData, salary_currency: 'USD' }).success).toBe(false);
   });
 
   it('rejects zero salary (TRY)', () => {
