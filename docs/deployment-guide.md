@@ -1,7 +1,7 @@
 # M2-EU Budgeter — Deployment Guide
 
-**Version:** 1.6.0
-**Date:** 2026-07-17
+**Version:** 1.13.0
+**Date:** 2026-10-12
 **Audience:** Whoever is cutting a release of M2-EU Budgeter
 
 > This describes the **actual release process currently in use** for this project — GitHub Releases, an unsigned macOS build produced locally, and a Windows build produced by GitHub Actions CI, both wired into the Tauri auto-updater. There is **no Apple code signing/notarization and no Windows EV certificate signing** in this project. If your institution later requires either (e.g. for wider public distribution beyond direct download links), treat that as new work, not something this guide already covers — Apple Developer Program enrollment, Windows code-signing certificates, and CI secrets for both would all need to be set up from scratch.
@@ -112,7 +112,7 @@ Like macOS, there is only one Windows target — `x64`. No `arm64` Windows build
 
 ## 6. Publishing the Release
 
-This is the step most prone to silent failure, because of one GitHub behaviour worth internalizing: **GitHub silently replaces spaces with dots in uploaded release asset filenames.** If you upload a file called `M2-EU Budgeter_1.6.0_aarch64.dmg`, the asset that actually ends up live is named `M2-EU.Budgeter_1.6.0_aarch64.dmg` — a URL built from the *intended* filename will 404. **Always stage release assets under space-free filenames before calling `gh release create`.**
+This is the step most prone to silent failure, because of one GitHub behaviour worth internalizing: **GitHub silently replaces spaces with dots in uploaded release asset filenames.** If you upload a file called `M2-EU Budgeter_1.13.0_aarch64.dmg`, the asset that actually ends up live is named `M2-EU.Budgeter_1.13.0_aarch64.dmg` — a URL built from the *intended* filename will 404. **Always stage release assets under space-free filenames before calling `gh release create`.**
 
 **Step 1 — stage everything with hyphens instead of spaces:**
 ```bash
@@ -151,6 +151,15 @@ gh release create v<version> \
   --notes "..."
 ```
 
+**Release notes — write them once, use them in two places.** Every release has user-visible notes, and they appear in **both**:
+
+1. **The in-app update prompt.** `latest.json`'s `notes` field (the `--notes` argument of `generate-latest-json.mjs`) is what the "Update Available" modal shows to existing users — one paragraph per line. It is rendered as **plain text, not Markdown**, so write short lines separated by `\n`, with no `**bold**`/bullets. Recent releases wrote it as ASCII-only text; if you include non-ASCII characters (Turkish letters, `—`, `€`) make sure they survive your shell quoting and check them in the verification step below.
+2. **The GitHub release page.** The `--notes` / `--notes-file` of `gh release create` is rendered as Markdown. The format used since v1.11.0: a `## What's New` heading with one bullet per change (bold lead-in, then the sentence; say plainly when an earlier release's export should be regenerated), followed by a short `## Installation` section (macOS: the `.dmg`; Windows: the `.exe`, or `.msi`; "existing installations will pick up this update automatically via the in-app updater").
+
+Keep the two in agreement — the modal text is the short version of the release-page bullets.
+
+**Asset names and signatures in practice.** The v1.13.0 release was published with the dotted names GitHub itself would produce (`M2-EU.Budgeter_1.13.0_aarch64.dmg`, `M2-EU.Budgeter.app.tar.gz`, `…_x64-setup.exe`, `…_x64_en-US.msi`) and **all eight files** attached: the four installers/updater archive, their `.sig` files, and `latest.json`. Uploading the `.sig` files is harmless (the signatures are also embedded in `latest.json`); what is not optional is that every `url` in `latest.json` equals a real asset name exactly. Whichever naming you stage under, `gh release view v<version> --json assets --jq '.assets[].name'` is the source of truth to copy the URLs from.
+
 ---
 
 ## 7. Post-Release Verification
@@ -168,7 +177,9 @@ curl -sIL -o /dev/null -w "Windows asset: HTTP %{http_code}\n" \
   "https://github.com/Byyoldas/m2-eu-budgeter/releases/download/v<version>/M2-EU-Budgeter_<version>_x64-setup.exe"
 ```
 
-All three must return `HTTP 200`. If they 404 and the repo is public, wait ~10-15 seconds (GitHub's asset CDN has a brief propagation delay right after upload) and retry before assuming something's actually wrong.
+All three downloads must return `HTTP 200`. If they 404 and the repo is public, wait ~10-15 seconds (GitHub's asset CDN has a brief propagation delay right after upload) and retry before assuming something's actually wrong.
+
+Also confirm the notes the modal will show: `curl -sL https://github.com/Byyoldas/m2-eu-budgeter/releases/latest/download/latest.json | node -e 'const m=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log(m.version);console.log(m.notes)'` should print the new version followed by the notes, and `gh release view v<version> --json body --jq .body` should show the Markdown version on the release page.
 
 **If any of these 404 persistently, check whether the repository is private.** GitHub Releases on a private repo are only downloadable by authenticated requests — `gh` works fine because it carries your token, but the installed app has no credentials and hits exactly the same 404 a bare `curl` does. This repo was flipped from private to public specifically to fix this (in v1.5.0) — if it's ever made private again, the auto-updater silently stops working for everyone until it's public again or the release hosting moves elsewhere (e.g. a dedicated public releases-only repo).
 

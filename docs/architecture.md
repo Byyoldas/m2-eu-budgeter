@@ -7,6 +7,12 @@
 
 ---
 
+> ## ⚠ Historical document (reviewed 2026-10-12, v1.13.0)
+>
+> This is the **pre-implementation architecture proposal** (framework evaluation and first design). The as-built description is [`architecture-final.md`](architecture-final.md) (with its Current Implementation Notes) and [`developer-guide.md`](developer-guide.md). Notable drift since: the code is now a Cargo workspace with the shared library `erc-core/` (domain, calculation, validation, persistence), `set_subcontracting` was replaced by item-based `add/update/delete_subcontracting_item`, and the project has a funding model (Actual Cost / Lumpsum) and a per-role salary currency (TRY / EUR). Treat the interface listings and code sketches below as historical design intent.
+
+---
+
 ## 1. Requirements Summary (Architecture Constraints)
 
 Before evaluating frameworks, the constraints that must be satisfied are:

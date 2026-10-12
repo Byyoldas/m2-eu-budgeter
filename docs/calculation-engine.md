@@ -7,7 +7,7 @@
 
 ---
 
-> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+> ## ⚠ Current Implementation Notes (as of v1.13.0, 2026-10-12)
 >
 > CALC-01 through CALC-11 (currency conversion, salary projection, equipment depreciation, flight/accommodation/subsistence lookups) remain algorithmically accurate — those formulas didn't change. The following did:
 >
@@ -18,7 +18,13 @@
 > - **CALC-16 (Total Eligible Costs)** is unaffected — still `Total Direct Costs + Indirect Costs (E)` — but note Subcontracting's business rule (whether it's in the Direct Costs feeding into this formula) has changed; see `business-rules.md`'s implementation note.
 > - **CALC-19 (Full Budget Summary)** now additionally orchestrates CALC-20a and CALC-20 as its final steps before assembling the DTO.
 >
-> The current, executable specification is the Rust source itself (`src-tauri/src/calculation/*.rs`), each with inline `#[cfg(test)]` worked examples analogous to this document's "Worked Examples" sections — treat those as the up-to-date equivalent of this document for anything CALC-12 or later touches.
+> - **Code location (since the workspace split):** the engine now lives in the shared library `erc-core/src/calculation/*.rs`; `erc-budget/src-tauri/src/calculation/` is only a re-export shim. Every `src-tauri/src/calculation/...` path in this document means `erc-core/src/calculation/...`.
+> - **CALC-01 is currency-aware.** A role's monthly salary is entered in **TRY or EUR**. `monthly_salary_to_eur(amount, currency, try_eur_rate)` converts a TRY salary exactly as CALC-01 describes, but a **EUR salary is used as entered — no division by the rate** (zero or negative is rejected with `INVALID_SALARY_EUR`; the TRY path keeps `INVALID_SALARY_TRY`). Everything downstream (CALC-02 inflation, CALC-03 cost, CALC-20a allocation) works on the resulting EUR figure and is identical for both currencies.
+> - **CALC-03 / CALC-20a — Person-Months are rounded before pricing.** `round_person_months` rounds `active_months × fte_fraction` to 1 decimal (round-half-up), once per role per project year, and the year's cost is `monthly_salary × rounded PM`. CALC-20a rounds each year's WP-covered PM the same way and then splits the cost across WPs in proportion to each WP's unrounded PM share, so the WP parts always sum to the rounded total. See `business-rules.md` PE-03.
+> - **Category B (Subcontracting) is a sum of items**, not one entered amount: the category total is Σ `subcontracting_items[].amount_eur`. In CALC-20 each item is split evenly across the WPs it is tagged with (exactly like Other Direct Costs). The inclusion/exclusion rules are unchanged: B counts toward Total Direct Costs and Total Eligible Costs but is **never** part of the indirect-cost base.
+> - **Funding model adds no formulas.** An *Actual Cost* project is held as a single implicit Work Package spanning the whole duration, so CALC-03, CALC-20a and CALC-20 run unchanged (one WP, one column) and the totals equal what the same costs would give in a one-WP Lumpsum project. Only the presentation (no WP step/columns) differs.
+>
+> The current, executable specification is the Rust source itself (`erc-core/src/calculation/*.rs`), each with inline `#[cfg(test)]` worked examples analogous to this document's "Worked Examples" sections — treat those as the up-to-date equivalent of this document for anything CALC-12 or later touches.
 
 ---
 

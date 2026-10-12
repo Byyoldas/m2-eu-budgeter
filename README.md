@@ -10,16 +10,17 @@ This repo is a small workspace: the app itself ([`erc-budget/`](erc-budget)) plu
 
 ## What it does
 
-- Converts TRY-denominated salaries to EUR and projects them year-by-year with compounding inflation, per role.
-- Organizes every cost category by **Work Package** rather than project year: Personnel cost is auto-allocated across Work Packages by month-overlap (a role's Start/End Month range is prorated against each WP's own Start/End Month range); Equipment is tagged to a single WP; Travel, Other Direct Costs, and Subcontracting can be tagged to one or more WPs, split evenly when more than one applies.
+- Asks for the **funding model** up front: *Lumpsum Funding* (budget organised by Work Package) or *Actual Cost* (total cost per category, no Work Packages — the WP step, selectors and export columns disappear).
+- Takes each personnel salary in **TRY or EUR** (TRY is converted at the project's exchange rate, EUR is used as entered) and projects it year-by-year with compounding inflation, per role; Person-Months are rounded to one decimal before pricing, as on the EU portal.
+- Organizes every cost category by **Work Package** rather than project year: Personnel cost is auto-allocated across Work Packages by month-overlap (a role's Start/End Month range is prorated against each WP's own Start/End Month range); Equipment is tagged to a single WP; Travel, Other Direct Costs, and Subcontracting (entered item by item) can be tagged to one or more WPs, split evenly when more than one applies.
 - Calculates equipment depreciation with the EU eligibility cap (never claims more than the usage-weighted purchase cost).
 - Looks up official EU Annex 2a/2b flight-distance-band, accommodation, and subsistence rates automatically — the user never has to know the rate tables.
 - Computes Category E indirect costs (25% of eligible direct costs) and all project totals live, on every edit.
 - Tracks the €430,000 Certificate on Financial Statements (CFS) threshold and prompts the user when it's crossed.
 - Renders a Gantt-style Work Package timeline chart, embedded in the exported Excel workbook.
 - Saves/loads projects as human-readable `.ercbudget` JSON files, with auto-save.
-- Exports a formatted Excel workbook (formula-linked, not just static values), a print-ready PDF summary, and a flat CSV.
-- Checks for updates automatically on launch (and on demand from the Welcome screen), installing signed releases in place via Tauri's updater.
+- Exports a formatted Excel workbook (live, sheet-to-sheet linked formulas — including the Budget Summary's per-WP cells — not static values; Actual Cost exports include a Total PM column), a print-ready PDF summary, and a flat CSV.
+- Checks for updates automatically on launch (and on demand from the Welcome screen); the update prompt shows what changed, and signed releases install in place via Tauri's updater.
 - Runs fully offline — all EU rate tables are compiled into the binary.
 
 See [`docs/business-rules.md`](docs/business-rules.md) for the business rules and [`docs/calculation-engine.md`](docs/calculation-engine.md) for the exact formulas. Both carry "Current Implementation Notes" callouts where the as-built app has moved past the original spec (WP-based budgeting being the main one).
@@ -84,7 +85,7 @@ cargo test --workspace
 pnpm --filter m2-eu-budgeter test
 ```
 
-201 Rust tests, 116 TypeScript tests, as of this writing.
+235 Rust tests, 152 TypeScript tests, as of v1.13.0.
 
 `erc-core`'s Rust structs also generate TypeScript bindings via `ts-rs` (checked in CI so they can't drift):
 
@@ -160,4 +161,4 @@ Full module map and conventions: [`docs/developer-guide.md`](docs/developer-guid
 
 ## Status
 
-v1.7.0 — auto-updating, signed macOS builds (local) and Windows builds (GitHub Actions CI, [`.github/workflows/windows-build.yml`](.github/workflows/windows-build.yml)); a separate [`ci.yml`](.github/workflows/ci.yml) gates every push/PR on `cargo fmt`/`clippy`/`test --workspace` plus the frontend test suite.
+v1.13.0 — auto-updating, signed macOS builds (local) and Windows builds (GitHub Actions CI, [`.github/workflows/windows-build.yml`](.github/workflows/windows-build.yml)); a separate [`ci.yml`](.github/workflows/ci.yml) gates every push/PR on `cargo fmt`/`clippy`/`test --workspace` plus the frontend test suite.

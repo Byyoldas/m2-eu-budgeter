@@ -7,15 +7,20 @@
 
 ---
 
-> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+> ## ⚠ Current Implementation Notes (as of v1.13.0, 2026-10-12)
 >
 > - **Group 3 (Work Packages)** now collects a **required Start Month and End Month per WP** in addition to the optional name — no longer "labelling only, does not affect calculations." Work Packages must collectively cover the whole project duration.
 > - **Group 4 (Personnel)**: the "Active project years" multi-select field no longer exists — replaced by a **Start Month / End Month** pair. The "Work Package assignment" input field described for Personnel no longer exists as a user input at all; WP allocation is computed automatically from the role's and every WP's timelines.
 > - **Group 5 (Equipment)**: any "Year of Purchase" field no longer exists. Work Package is a **single required select** (not optional, not multi-select) — equipment is purchased once and charged to exactly one WP.
 > - **Group 6 (Travel)**: any "Project Year" field no longer exists. Work Package is a **required multi-select** (at least one) — cost splits evenly across every WP selected.
 > - **Group 7 (Other Direct Costs)**: same as Travel — no Project Year field; Work Package is a required multi-select.
-> - **Group 8 (Subcontracting)**: gained a **required Work Package select** (single). It is no longer a placeholder always defaulting to zero with no real calculation behind it.
+> - **Group 8 (Subcontracting)** is now an **optional list of items** on its own wizard step, replacing the single "Subcontracting Amount (EUR)" field (SC-01 below). Each item has **Name** (required), **Amount (EUR)** (required, > 0), **Notes** (optional) and **Work Package(s)** (required multi-select, at least one — cost splits evenly; hidden in Actual Cost mode). An empty list is valid and means Category B = €0. Items can be added, edited, duplicated and deleted.
+> - **Group 1 (Project Setup) gained "Funding Model"** (segmented choice, default *Lumpsum Funding*): **Actual Cost** or **Lumpsum Funding**. In *Actual Cost* the "Number of Work Packages" input is hidden, the Work Packages step (Group 3) is skipped, and the Work Package selector is removed from Equipment, Travel, Other Direct Costs and Subcontracting forms and from the CFS dialog. Changing the model on an existing project re-files its items (Actual Cost → everything goes to the single implicit WP; back to Lumpsum → the count returns to 3 and Work Packages must be defined and items re-tagged).
+> - **Group 4 (Personnel) gained "Salary currency"** (TRY — default — or EUR) next to the monthly-salary field. The label and the live preview follow the choice; a EUR salary needs no exchange rate. The same field name is stored in the file regardless of currency (see `domain-model.md`).
+> - **Group 6 (Travel)** and **Group 5/7**: the *Add* form always opens blank (a stale-prefill bug where "Add Trip" reopened with the last edited trip's values was fixed in v1.12.0); the right-hand preview now also shows the **subsistence rate (€/day)** and accommodation rate (€/night) for the selected destination.
 > - Group 9 (Partner Information) is still accurate as written — the app remains single-beneficiary in v1.6.0.
+>
+> Field-level help text and validation messages have also been reworded since v1.6.0 (e.g. server-side Work Package messages are now shown instead of failing silently).
 >
 > The authoritative current field list for any screen is the corresponding Zod schema in `src/validators/schemas.ts` and the matching Rust validator in `src-tauri/src/validation/mod.rs`.
 

@@ -7,6 +7,12 @@
 
 ---
 
+> ## ⚠ Historical document (reviewed 2026-10-12, v1.13.0)
+>
+> This is the **original sprint plan and risk register** (written 2026-07-10). It is kept as a historical record and has not been rewritten as the project evolved; release history and the as-built structure are in [`deployment-guide.md`](deployment-guide.md), [`developer-guide.md`](developer-guide.md) and the repository's GitHub releases (currently v1.13.0). `set_subcontracting`, year-tagged cost items and the single-crate layout mentioned below no longer exist.
+
+---
+
 ## 1. Project Context
 
 This plan covers the full development lifecycle of the ERC Budget application from environment setup through production release. The application is a cross-platform desktop tool (Tauri v2 + Rust + TypeScript/React) that replaces an Excel workbook for ERC Actual Costs grant budgeting.

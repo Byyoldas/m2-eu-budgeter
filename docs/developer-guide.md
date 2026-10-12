@@ -1,9 +1,9 @@
 # M2-EU Budgeter — Developer Guide
 
-**Version:** 1.6.0
-**Applies to:** M2-EU Budgeter v1.6.0 (Tauri v2 + Rust + React/TypeScript)
+**Version:** 1.13.0
+**Applies to:** M2-EU Budgeter v1.13.0 (Tauri v2 + Rust + React/TypeScript)
 **Audience:** Engineers maintaining or extending the application
-**Date:** 2026-07-17
+**Date:** 2026-10-12
 
 > This guide describes the application **as it actually exists in the repository today**. Earlier planning documents in this folder (`project-overview.md`, `excel-analysis.md`, `business-rules.md`, `domain-model.md`, `calculation-engine.md`, `input-catalog.md`, `ux-design.md`, `development-plan.md`, `architecture.md`) were written *before* implementation and describe an initial design that has since diverged in a few significant ways — most importantly, cost categories are now organised by **Work Package (WP)** instead of **project year**. See the "Current Implementation Notes" callout near the top of each of those documents for what changed. This guide and `deployment-guide.md` are kept in sync with the code and can be trusted as-is.
 
@@ -78,7 +78,8 @@ erc-budget/
 │   │   ├── Equipment.tsx
 │   │   ├── Travel.tsx
 │   │   ├── OtherCosts.tsx            # C3 items + CFS
-│   │   ├── Subcontracting.tsx        # Category B items — same item-by-item shape as OtherCosts, its own step
+│   │   ├── Subcontracting.tsx        # Category B items — same item-by-item shape as OtherCosts, its own optional step
+│   │   ├── *.test.tsx                # Screen-level tests (FundingModel, WorkPackages, Travel) — React Testing Library + jsdom
 │   │   └── ReviewExport.tsx
 │   ├── components/
 │   │   ├── ProgressStepper.tsx
@@ -86,15 +87,17 @@ erc-budget/
 │   │   ├── BudgetWpBarChart.tsx      # Per-WP bar chart (NOT per-year — renamed from BudgetYearBarChart)
 │   │   ├── BudgetRingChart.tsx
 │   │   ├── WorkPackageGanttChart.tsx
-│   │   ├── RoleCard.tsx / EquipmentCard.tsx / TripCard.tsx   # List-item cards with Edit + Duplicate + Delete
+│   │   ├── RoleCard.tsx / EquipmentCard.tsx / TripCard.tsx   # List-item cards: Edit + Delete (RoleCard, EquipmentCard), Edit + Duplicate + Delete (TripCard); OtherCosts and Subcontracting rows have Duplicate too
 │   │   ├── CFSModal.tsx
+│   │   ├── SaveStatus.tsx
 │   │   ├── WarningBanner.tsx
 │   │   ├── EmptyStateCard.tsx
 │   │   ├── LivePreviewBox.tsx
 │   │   ├── FormField.tsx
-│   │   └── UpdateChecker.tsx         # Silent background update check + "Update Available" modal
+│   │   ├── UpdateChecker.tsx         # Silent background update check + "Update Available" modal (shows the release notes)
+│   │   └── UpdateChecker.test.tsx
 │   ├── store/
-│   │   ├── projectStore.ts           # Zustand store — screen, summary, projectConfig, rate data
+│   │   ├── projectStore.ts           # Zustand store — screen, summary, projectConfig, rate data; selectors useFundingModel / useIsActualCost / useSubcontractingItems
 │   │   └── updaterStore.ts           # Shared updater-check state (used by UpdateChecker + Welcome's manual button)
 │   ├── hooks/
 │   │   ├── useBudgetSummary.ts       # Wraps an IPC mutation: loading/error state + store update
@@ -109,7 +112,7 @@ erc-budget/
 │   │   ├── csvExporter.ts
 │   │   └── pdfExporter.ts            # window.print() + print stylesheet, not a PDF library
 │   ├── types/
-│   │   └── index.ts                  # TypeScript types mirroring Rust DTOs (kept in lockstep by hand)
+│   │   └── index.ts                  # Re-exports the ts-rs-generated DTO types from erc-core/bindings; also screensFor(fundingModel) + Screen list
 │   ├── utils/
 │   │   └── formatAppError.ts
 │   ├── App.tsx                       # Root component / screen router / STEP_ORDER
@@ -120,19 +123,20 @@ erc-budget/
 │   ├── src/
 │   │   ├── lib.rs                    # Crate root; registers plugins, AppState, invoke_handler
 │   │   ├── main.rs
-│   │   ├── commands/                 # Application layer (IPC handlers), one file per category
+│   │   ├── commands/                 # Application layer (IPC handlers), one file per category — the only Rust code that lives here for real
 │   │   │   ├── mod.rs
 │   │   │   ├── project.rs            # create/update/load/save project, get_rate_versions, get_countries
 │   │   │   ├── personnel.rs
 │   │   │   ├── equipment.rs
 │   │   │   ├── travel.rs
-│   │   │   └── other_costs.rs        # C3 items, subcontracting, CFS
-│   │   ├── domain/
+│   │   │   ├── other_costs.rs        # C3 items + CFS
+│   │   │   └── subcontracting.rs     # Category B items (add / update / delete)
+│   │   ├── domain/                   # ⚠ re-export shims over erc-core (see "Where the logic lives" below)
 │   │   │   ├── mod.rs
 │   │   │   ├── entities.rs           # Project, PersonnelRole, EquipmentItem, Trip, etc.
 │   │   │   ├── dto.rs                # Input/Detail DTOs (JSON-serialisable across IPC)
 │   │   │   └── rate_data.rs          # EU rate table loading + lookup (RateData, RateVersion, CountryRate)
-│   │   ├── calculation/              # Calculation Engine — see §12
+│   │   ├── calculation/              # ⚠ shim — real code is erc-core/src/calculation/ (Calculation Engine — see §12)
 │   │   │   ├── mod.rs
 │   │   │   ├── salary_projection.rs  # CALC-01/02: TRY→EUR, yearly inflation compounding
 │   │   │   ├── personnel_cost.rs     # CALC-03/04/20a: cost lines + month-overlap WP allocation
@@ -142,20 +146,16 @@ erc-budget/
 │   │   │   ├── wp_budget.rs          # CALC-20: per-Work-Package budget aggregation
 │   │   │   ├── budget_summary.rs     # CALC-19: orchestrates every calculation in dependency order
 │   │   │   └── cfs_checker.rs
-│   │   ├── validation/
+│   │   ├── validation/               # ⚠ shim over erc-core
 │   │   │   └── mod.rs                # All field/entity validators; ValidationErrors/FieldError
-│   │   ├── persistence/
+│   │   ├── persistence/              # ⚠ shim over erc-core
 │   │   │   └── mod.rs                # .ercbudget file I/O (JSON, format_version'd) + auto-save
-│   │   └── error.rs                  # AppError (Validation / NoProject / Persistence / Internal)
-│   ├── resources/
-│   │   └── eu_travel_rates/          # Bundled EU Annex 2a/2b rate tables (embedded via include_str!)
-│   │       ├── v_before_2024_07_31.json
-│   │       ├── v_2024_07_31_to_2025_05_12.json
-│   │       └── v_from_2025_05_13.json     # current tier as of this writing
+│   │   └── error.rs                  # ⚠ shim — AppError lives in erc-core
 │   ├── capabilities/
 │   │   └── default.json              # Tauri v2 ACL — dialog/shell/updater/process/fs permissions
 │   ├── tests/
-│   │   └── integration_test.rs       # End-to-end CALC-19 tests against a full Project fixture
+│   │   ├── integration_test.rs       # End-to-end CALC-19 tests against a full Project fixture (30 tests incl. funding model / EUR salary / overlapping WPs)
+│   │   └── regression_tests.rs       # Pinned numeric regressions
 │   ├── Cargo.toml
 │   └── tauri.conf.json               # Bundle config + plugins.updater (pubkey, endpoints)
 │
@@ -167,7 +167,8 @@ erc-budget/
 │   ├── validators.test.ts
 │   └── store.test.ts
 │
-├── .github/workflows/
+├── .github/workflows/                # (at the repository root)
+│   ├── ci.yml                        # fmt / clippy / cargo test --workspace / frontend tests on every push and PR
 │   └── windows-build.yml             # Builds + signs the Windows installer on every push to main
 │
 ├── package.json
@@ -175,6 +176,8 @@ erc-budget/
 ├── vitest.config.ts
 └── tsconfig.json
 ```
+
+**Where the logic lives (the `erc-core` workspace member).** The repository is a Cargo workspace (`Cargo.toml` at the root: `erc-core` + `erc-budget/src-tauri`). Everything that is not Tauri-specific — domain entities and DTOs, the calculation engine, validators, `.ercbudget` persistence (including legacy-file migration), the bundled EU rate tables and `AppError` — lives in the shared library **`erc-core/`** (`erc-core/src/{domain,calculation,validation,persistence}`, `erc-core/resources/eu_travel_rates/`), which a sibling project (ERC Execution) also consumes. The same-named directories under `erc-budget/src-tauri/src/` are one-line `pub use erc_core::...` re-export shims so older import paths keep resolving. **When this guide (or any older document) says `domain/dto.rs`, `validation/mod.rs`, `calculation/*.rs` or `persistence/mod.rs`, edit the file under `erc-core/src/`, not the shim.** `erc-core/bindings/*.ts` is generated by `ts-rs` and committed — see §5 "Types". `erc-core/ts/schemas.ts` holds the shared Zod schemas; `erc-budget/src/validators/schemas.ts` is this app's copy and the two must stay in step.
 
 Two things worth calling out explicitly because they differ from what you might expect from a typical Tauri starter:
 
@@ -205,19 +208,18 @@ IPC calls to Rust will fail (no Tauri bridge), so screens depending on backend d
 
 ## 4. Running the Test Suite
 
-**Rust tests (unit + integration, 186 total as of v1.6.0):**
+**Rust tests (unit + integration, 235 total as of v1.13.0 — 193 in `erc-core`, 30 integration + 4 regression + 8 unit in `erc-budget`):**
 ```bash
-cd erc-budget/src-tauri
-cargo test
+cargo test --workspace      # from the repository root; covers erc-core and erc-budget/src-tauri
 ```
 
 Individual modules:
 ```bash
-cargo test calculation::personnel_cost   # one module's tests
-cargo test --test integration_test       # only the end-to-end integration tests
+cargo test -p erc-core calculation::personnel_cost   # one module's tests
+cargo test -p erc-budget --test integration_test    # only the end-to-end integration tests
 ```
 
-**TypeScript tests (Vitest, 116 total as of v1.6.0):**
+**TypeScript tests (Vitest, 152 total as of v1.13.0):**
 ```bash
 cd erc-budget
 pnpm test                    # single run
@@ -236,7 +238,9 @@ Coverage thresholds (enforced by `vitest.config.ts`, only over `validators/`, `s
 
 **Running everything before a release:**
 ```bash
-cd erc-budget/src-tauri && cargo test && cd .. && pnpm tsc --noEmit && pnpm vitest run && pnpm build
+cargo test --workspace && cd erc-budget && pnpm tsc --noEmit && pnpm vitest run && pnpm build
+# if any Rust DTO/entity changed, also regenerate + commit the TS bindings:
+cargo test -p erc-core --features ts-rs
 ```
 
 There is no ESLint or Prettier configuration in this repository at the time of writing — formatting is by convention (match surrounding code), not tool-enforced on the TypeScript side. Rust formatting/linting (`cargo fmt`, `cargo clippy`) is available via the standard toolchain but is not wired into CI.
@@ -278,7 +282,7 @@ All Zod schemas live here, performing field-level validation before the IPC call
 
 ### Types (`src/types/index.ts`)
 
-All TypeScript types mirroring Rust DTOs live here. **There is no code generation** — when a Rust DTO in `domain/dto.rs` changes, the corresponding TypeScript interface must be updated by hand. This is the single most common source of bugs in this codebase (see the "recurring bug pattern" callouts in `future-extensions.md`): forgetting to add a new DTO field on the TypeScript side, or getting a `#[serde(rename = ...)]`/casing mismatch wrong.
+The DTO, enum and error types are **generated from the Rust structs by `ts-rs`** into `erc-core/bindings/*.ts` and re-exported from here (a few under this app's historical `XInput` names). Do not hand-edit the bindings: after changing a DTO or entity in `erc-core`, run `cargo test -p erc-core --features ts-rs` and **commit the regenerated files** (the feature is not part of the default build). Only app-specific UI state is hand-written in `index.ts` — notably the `Screen` list and `screensFor(fundingModel)`, which decides which wizard steps exist (an Actual Cost project has no Work Packages step). Zod schemas in `validators/schemas.ts` are still maintained by hand and are the other half of the recurring "forgot one side" bug pattern (see `future-extensions.md`): a new field must be added to the Rust DTO, the regenerated binding, the Zod schema, and — if it is a new serde enum — checked for `rename_all` casing (`SalaryCurrency` is serialised `"TRY"`/`"EUR"`, `FundingModel` as `"ActualCost"`/`"LumpSum"`).
 
 ### Screens and Edit Forms
 
@@ -365,6 +369,8 @@ Every mutation command follows: **Frontend → Backend**: a JSON payload wrapped
 | `save_project` | `saveProject()` | `void` |
 | `save_project_as` | `saveProjectAs(path)` | `void` |
 | `get_project` | `getProject()` | `BudgetSummaryDto` |
+| `get_project_config` | `getProjectConfig()` | `ProjectConfigInput` |
+| `get_project_path` | `getProjectPath()` | `string \| null` |
 | `get_rate_versions` | `getRateVersions()` | `RateVersionSummary[]` |
 | `get_countries` | `getCountries(versionId)` | `CountrySummary[]` |
 | `add_personnel_role` | `addPersonnelRole(input)` | `BudgetSummaryDto` |
@@ -385,7 +391,11 @@ Every mutation command follows: **Frontend → Backend**: a JSON payload wrapped
 | `add_cfs_item` | `addCfsItem(amountEur, workPackageIds)` | `BudgetSummaryDto` |
 | `remove_cfs_item` | `removeCfsItem()` | `BudgetSummaryDto` |
 | `dismiss_cfs_warning` | `dismissCfsWarning()` | `BudgetSummaryDto` |
-| `set_subcontracting` | `setSubcontracting(amountEur, workPackageId)` | `BudgetSummaryDto` |
+| `add_subcontracting_item` | `addSubcontractingItem(input)` | `BudgetSummaryDto` |
+| `update_subcontracting_item` | `updateSubcontractingItem(id, input)` | `BudgetSummaryDto` |
+| `delete_subcontracting_item` | `deleteSubcontractingItem(id)` | `BudgetSummaryDto` |
+
+`set_subcontracting` (a single lump sum) was removed in v1.12.0 in favour of the three item commands above; projects saved with the old lump sum are migrated on load (`persistence::migrate_legacy_subcontracting` turns it into one item). For an Actual Cost project every command that takes `work_package_id(s)` ignores the incoming value and forces the single implicit WP (`1`) — the frontend does not send WP fields in that mode.
 
 **Rule: never add a frontend-only recalculation.** If you need a new total or derived value, add it to `BudgetSummaryDto` and compute it in the Rust calculation engine (`budget_summary.rs` or one of the `calculation/*.rs` modules it orchestrates), not in the frontend.
 
@@ -421,6 +431,8 @@ If you're implementing something described in `business-rules.md`, `domain-model
 
 Suppose you need to add **Category D: Exceptional Costs**.
 
+> Paths below like `domain/entities.rs`, `domain/dto.rs`, `validation/mod.rs` and `calculation/*.rs` refer to **`erc-core/src/...`** (see §2, "Where the logic lives"); `commands/`, `lib.rs` and everything under `erc-budget/src` stay in the app. After step 2, regenerate the TypeScript bindings with `cargo test -p erc-core --features ts-rs` and commit them. If the category should be optional and item-by-item, copy the **Subcontracting** implementation (`SubcontractingItem`, `commands/subcontracting.rs`, `Subcontracting.tsx`, `migrate_legacy_subcontracting` if you replace an older field) — it is the most recent worked example of this checklist. Also decide how the new category behaves for an **Actual Cost** project (WP ids forced to the single implicit WP, WP selector hidden — see §8).
+
 1. **Domain entity** (`domain/entities.rs`): add an `ExceptionalCostItem` struct with `id`, `name`, `amount_eur: Decimal`, `work_package_ids: Vec<u8>` (follow the OtherDirectCostItem pattern — WP-tagged, not year-tagged), and a `Vec<ExceptionalCostItem>` field on `Project`.
 2. **DTOs** (`domain/dto.rs`): an `ExceptionalCostInputDto` and `ExceptionalCostItemDetailDto` (make sure the detail DTO includes every field the input form collects — see §5's edit-form invariant). Add `category_d_total: Decimal` and `exceptional_cost_detail: Vec<...>` to `BudgetSummaryDto`.
 3. **Validation** (`validation/mod.rs`): `validate_exceptional_cost_item(...)`.
@@ -441,8 +453,8 @@ Suppose you need to add **Category D: Exceptional Costs**.
 
 When the European Commission publishes a new Annex 2a/2b rate update:
 
-1. Create `src-tauri/resources/eu_travel_rates/v_from_YYYY_MM_DD.json`, matching the schema of the existing files (`version_id`, `valid_from`, `valid_until`, `description`, `flight_bands[]`, `countries[]` — see `domain/rate_data.rs`'s `RateVersion`/`FlightBand`/`CountryRate` structs for exact field names and the `#[serde(rename = ...)]` mappings). Every version must include an `"OTHER"` fallback country entry.
-2. Add it to the `include_str!` list in `RateData::load_embedded()` (`domain/rate_data.rs`).
+1. Create `erc-core/resources/eu_travel_rates/v_from_YYYY_MM_DD.json`, matching the schema of the existing files (`version_id`, `valid_from`, `valid_until`, `description`, `flight_bands[]`, `countries[]` — see `domain/rate_data.rs`'s `RateVersion`/`FlightBand`/`CountryRate` structs for exact field names and the `#[serde(rename = ...)]` mappings). Every version must include an `"OTHER"` fallback country entry.
+2. Add it to the `include_str!` list in `RateData::load_embedded()` (`erc-core/src/domain/rate_data.rs`).
 3. Add a structural smoke test and at least one spot-check test in `domain/rate_data.rs`'s `#[cfg(test)] mod tests` pinning a couple of known values (see `test_current_version_matches_official_source_values` for the pattern) — this is what would have caught the fact that the originally-shipped rate tables were fabricated placeholder data rather than the real EU figures (fixed in v1.4.0).
 4. **Transcribe carefully.** If you're extracting the table from a PDF, install `poppler` (`brew install poppler`) for `pdftotext -layout`, and prefer scripting the JSON construction (see the pattern used for the v1.4.0 fix) over hand-typing ~200 country rows — it's far too easy to introduce a transcription error, and GitHub's asset-name space→dot sanitization and similar surprises are easier to catch with an automated diff than by eye.
 
@@ -494,6 +506,8 @@ Because of the formulas, **`excelExporter.test.ts` doesn't just assert formula t
 ## 14. The Auto-Updater
 
 M2-EU Budgeter checks GitHub Releases for a newer signed version on launch (silently, via `UpdateChecker.tsx`) and on demand (via the Welcome screen's "Check for Updates" button, both backed by `src/store/updaterStore.ts`). This is powered by `tauri-plugin-updater` / `@tauri-apps/plugin-updater`, configured in `tauri.conf.json`'s `plugins.updater` (a public key + the `https://github.com/<owner>/<repo>/releases/latest/download/latest.json` endpoint).
+
+The update prompt also shows **what changed**: the modal renders `update.body` — the `notes` field of `latest.json` (written by `generate-latest-json.mjs --notes`) — one paragraph per line, so write the notes as short plain lines (no Markdown rendering). Those notes are the same text that should go in the GitHub release body; `UpdateChecker.test.tsx` covers the rendering.
 
 This is purely a release-process concern from a day-to-day development standpoint — you don't need to think about it unless you're cutting a release (see `deployment-guide.md`) or touching `UpdateChecker.tsx`/`updaterStore.ts` directly. One thing worth knowing if a local build starts failing: `tauri.conf.json` has `bundle.createUpdaterArtifacts: true`, which means **every** `pnpm tauri build` — not just official releases — requires `TAURI_SIGNING_PRIVATE_KEY` (and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""`) to be set in the environment, or the build fails outright with "no private key". See `deployment-guide.md` for where that key lives.
 

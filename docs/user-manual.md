@@ -7,7 +7,7 @@
 
 ---
 
-> ## ⚠ Current Implementation Notes (as of v1.6.0, 2026-07-17)
+> ## ⚠ Current Implementation Notes (as of v1.13.0, 2026-10-12)
 >
 > The app is now called **M2-EU Budgeter** (renamed from "ERC Budget Tool"). The step order, dashboard, and CFS/save/export sections of this manual are still accurate. The following field-level details have changed:
 >
@@ -15,6 +15,13 @@
 > - **Step 5 (Equipment)**: "Year of Purchase" no longer exists. Work Package is now **required** (not optional) and single-select — pick the one WP the purchase is charged to.
 > - **Step 6 (Travel)**: "Project Year" no longer exists. Work Package is now **required** (at least one; cost splits evenly if you tag more than one). The Distance Calculator link now opens in your regular web browser rather than inside the app. The specific flight-band EUR figures in this section's example are outdated — the real EU Annex 2a/2b rates (flight, accommodation, subsistence) were fixed in v1.4.0; the app now shows the correct current figures, this document just hasn't been re-derived from them.
 > - **Step 7 (Other Direct Costs)**: "Project Year" no longer exists. Work Package is now **required** (at least one). Items you've added can now be properly **edited** — click Edit on any item to change its name, amount, notes, or Work Package(s).
+> - **Step 1 (Project Setup) — Funding Model.** Choose **Actual Cost** or **Lumpsum Funding** (default). *Lumpsum Funding* is the Work-Package-based budget this manual describes. *Actual Cost* has **no Work Packages**: the "Number of Work Packages" box disappears, **Step 3 (Work Packages) is skipped**, and the Work Package pickers vanish from Equipment, Travel, Other Direct Costs, Subcontracting and the CFS dialog; the Review screen and all exports show total costs per category instead of per-WP columns. You can change the model later: switching to Actual Cost folds everything into one budget; switching back to Lumpsum asks you to define the Work Packages again and re-tag your cost items.
+> - **Step 4 (Personnel) — Salary currency.** Next to *Current monthly salary* pick **TRY** or **EUR**. A TRY salary is converted with the exchange rate from Step 2; a **EUR salary is used exactly as typed** (no conversion). You can mix both in one project. Person-Months are rounded to one decimal before the cost is calculated (e.g. 3 months × FTE 0.79 = 2.37 → 2.4), the same way the EU Funding & Tenders Portal does it.
+> - **Step 6 (Travel)**: the preview beside the form now shows the EU **accommodation (€/night)** and **subsistence (€/day)** reference rates for the chosen destination. Each trip has a **Duplicate** button that opens the form pre-filled with a copy of it (nothing is saved until you press Save). "Add Trip" always opens an empty form.
+> - **Step 7 (Other Direct Costs)** items also have a **Duplicate** button.
+> - **New step — Subcontracting (Category B)**, after Other Direct Costs. It is optional. Add one item per subcontract with a **name**, **amount (EUR)**, optional **notes** and — in Lumpsum mode — the **Work Package(s)** it serves (the amount is split evenly if you pick more than one). Items can be edited, duplicated and deleted. This replaces the single "total subcontracting amount" box described under Step 8 below, and projects saved with the old single amount open with it converted to one item. Subcontracting is included in the total and the EU contribution but not in the indirect-cost base.
+> - **Section 8 (Exporting)** below describes the original three-sheet export; the current workbook is described in the replacement text there.
+> - **Updates:** when the update popup appears it now also lists **what is new in that version**. The Welcome screen's "Check for Updates" button and the background check behave as described next.
 > - **Not covered here**: an in-app updater. The Welcome screen has a "Check for Updates" button, and the app also checks silently in the background on launch — if a newer version is available, a popup offers to download and install it automatically.
 >
 > This document otherwise reflects the app reasonably well for a proposal writer's day-to-day use — the changes above are the ones that would actually confuse a first-time user following it step by step.
@@ -364,17 +371,21 @@ If your **Requested EU Contribution exceeds €430,000**, EU grant rules require
 
 From the Review & Export screen, click one of the three export buttons:
 
-**Export to Excel (.xlsx)** — generates a formatted Excel workbook with three sheets:
+**Export to Excel (.xlsx)** — generates a workbook whose numbers are **live Excel formulas**, linked from sheet to sheet, so you can adjust an input in the workbook and watch the totals follow. The sheets are:
 
-- *Overview* — one-page budget table in ERC submission format (Categories A–E, totals).
-- *Budget by Year* — per-year breakdown (years as columns, categories as rows).
-- *Detail* — itemised list of every cost line.
+- *Budget Summary* — the submission-format table (Categories A–E, totals). In Lumpsum mode it has one column per Work Package; each cell is a formula over the detail sheets, not a typed number.
+- *Gantt Chart* (Lumpsum only) — the Work Package timeline as an image.
+- *Personnel* — one row per role: salary (shown with its own currency, TRY or EUR), annual increase, PM, start/end month, **Base Monthly** and **Average Monthly** (€) (the plain average of the role's inflation-adjusted monthly salary across all project years — shown for reference, it does not feed any total), the cost per Work Package, and the **Total (€)**. In Actual Cost mode there are no Work Package columns; instead a **Total PM** column and a totals row give the rounded Person-Months per role and for the project — the figure to enter in the Funding & Tenders Portal. A Work Package Timelines block above the table shows the Person-Months audit.
+- *Equipment*, *Travel*, *Other Direct Costs* and *Subcontracting* (only if you entered subcontracting items) — one row per item. In Lumpsum mode these carry the Work Package columns that feed the Budget Summary.
+- Two hidden helper sheets (`_WPMonthHelper`, `_WPYearHelper`) that the Personnel formulas use. Leave them in place; do not delete them.
 
-**Export to PDF** — generates a formatted one-page PDF summary. Suitable for attaching to a printed proposal or sharing with a co-investigator.
+**What the Personnel sheet's "Unattributed (€)" column means (Lumpsum only).** Each role's *Total* is the whole cost of that person; the Work Package columns are the part of it that falls in months covered by a Work Package. *Unattributed = Total − sum of the WP columns.* It is **0** in a normal project, and changes only if (a) you edit Work Package start/end months in the workbook so some of a role's months are no longer covered by any Work Package, or (b) you overwrite individual WP cells by hand. Changing a salary, increase rate or PM changes every column proportionally, so Unattributed stays 0 — that is correct, not a missed update. A non-zero value is a signal to look at WP coverage, not an error in the totals.
+
+**Export to PDF** — generates a formatted summary (print dialog / Save as PDF). Suitable for attaching to a printed proposal or sharing with a co-investigator.
 
 **Export to CSV** — generates a flat comma-separated file with all budget lines. Useful for importing into an institutional finance system or a different spreadsheet.
 
-All three exports use the same calculated values shown on the Review screen.
+In Actual Cost mode all three exports leave out the Work Package columns. All three exports use the same calculated values shown on the Review screen. Exports made with v1.11.0 or v1.12.0 of projects with overlapping Work Packages should be regenerated (a v1.13.0 fix to the Unattributed column).
 
 ---
 
